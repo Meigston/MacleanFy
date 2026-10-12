@@ -1,4 +1,14 @@
-import { app, clipboard, ipcMain, nativeImage, shell, type IpcMainInvokeEvent, type WebContents } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  ipcMain,
+  nativeImage,
+  shell,
+  type IpcMainInvokeEvent,
+  type WebContents,
+} from 'electron';
+import electronUpdater from 'electron-updater';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { CATEGORIES, type CategoryId } from '../core/types';
@@ -10,18 +20,50 @@ import {
   type InstalledAppDTO,
   type MaintenanceTask,
   type UninstallResultDTO,
+  type UpdateState,
 } from '../shared/api';
 import { SUPPORT, isPixOption } from '../shared/support';
 import { Engine } from './engine';
 import { HistoryStore } from './history';
 import { getSystemInfo, runMaintenance } from './system';
+import { Updater } from './updater';
 
 const FULL_DISK_ACCESS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
+
+/** A primeira busca por versão nova espera o app assentar; depois, uma por dia enquanto ele estiver aberto. */
+const UPDATE_FIRST_CHECK_MS = 10 * 1000;
+const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Ferramenta de desenvolvimento: `MACLEANFY_UPDATE_DEMO=available pnpm start` mostra uma
+ * etapa da atualização rodando do código-fonte, para conferir e fotografar as telas.
+ * Nunca vale no app empacotado.
+ */
+function demoUpdate(step: string | undefined): UpdateState | null {
+  const version = '9.9.9';
+  switch (step) {
+    case 'checking':
+    case 'error':
+      return { status: step };
+    case 'current':
+      return { status: 'current', checkedAt: Date.now() };
+    case 'available':
+    case 'ready':
+      return { status: step, version };
+    case 'downloading':
+      return { status: 'downloading', version, transferred: 48_300_000, total: 117_600_000 };
+    default:
+      return null;
+  }
+}
 
 /** O ícone aparece a 38px; o dobro cobre telas Retina. */
 const APP_ICON_SIZE = { width: 76, height: 76 };
 
-/** Só o que o próprio app aponta: o repositório, o projeto de origem, quem o desenvolve (perfil e outro app) e a doação. */
+/**
+ * Só o que o próprio app aponta: o repositório, o projeto de origem, quem o desenvolve (perfil e
+ * outro app) e a doação.
+ */
 const EXTERNAL_ALLOWLIST = [
   'https://github.com/',
   'https://www.linkedin.com/in/meigston/',
@@ -49,6 +91,18 @@ export function registerIpc(): void {
   // Apps devolvidos pela última listagem, por caminho do bundle.
   let knownApps = new Map<string, AppInfo>();
 
+  // Rodando do código-fonte não há instalação para atualizar: o atualizador fica inerte.
+  const updater = new Updater(app.isPackaged ? electronUpdater.autoUpdater : null, (state) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(CHANNELS.updateChanged, state);
+    }
+  });
+  const updateDemo = app.isPackaged ? null : demoUpdate(process.env.MACLEANFY_UPDATE_DEMO);
+  if (app.isPackaged) {
+    setTimeout(() => updater.check(false), UPDATE_FIRST_CHECK_MS);
+    setInterval(() => updater.check(false), UPDATE_CHECK_INTERVAL_MS);
+  }
+
   /** Recusa chamadas que não venham da página do próprio app. */
   function handle<Args extends unknown[], Result>(
     channel: string,
@@ -65,6 +119,11 @@ export function registerIpc(): void {
 
   handle(CHANNELS.systemInfo, () => getSystemInfo());
   handle(CHANNELS.historyGet, () => history.read());
+
+  handle(CHANNELS.updateState, () => updateDemo ?? updater.current());
+  handle(CHANNELS.updateCheck, () => updater.check(true));
+  handle(CHANNELS.updateDownload, () => updater.download());
+  handle(CHANNELS.updateInstall, () => updater.install());
 
   handle(CHANNELS.scanRun, (sender, categoryIds?: unknown) => {
     const ids = Array.isArray(categoryIds) ? categoryIds.filter(isCategoryId) : undefined;

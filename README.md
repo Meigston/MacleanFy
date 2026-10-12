@@ -63,6 +63,10 @@ na Biblioteca, e manda tudo para a Lixeira.
 
 **Manutenção.** Limpar o cache de DNS e liberar espaço purgável.
 
+**Atualizações.** O app consulta as versões do projeto no GitHub ao abrir e uma vez por dia,
+sem mandar dados seus. Quando há versão nova ele avisa; só baixa se você pedir, e instala
+ao reiniciar. Dá para buscar na hora em *Sobre e ajustes*.
+
 ![Limpeza inteligente](docs/screenshots/limpeza.png)
 
 ## Segurança
@@ -101,12 +105,14 @@ pnpm dev
 pnpm dist
 ```
 
-Saem dois instaladores em `dist/`:
+Sai em `dist/`, para cada arquitetura, o instalador que a pessoa baixa e o pacote que o app
+instalado usa para se atualizar:
 
 | Arquivo | Para |
 | --- | --- |
-| `MacleanFy-arm64.dmg` | Macs com Apple Silicon (M1 ou mais novo) |
-| `MacleanFy-x64.dmg` | Macs com Intel |
+| `MacleanFy-arm64.dmg` e `MacleanFy-arm64.zip` | Macs com Apple Silicon (M1 ou mais novo) |
+| `MacleanFy-x64.dmg` e `MacleanFy-x64.zip` | Macs com Intel |
+| `latest-mac.yml` | diz ao app qual é a versão nova e o SHA-512 de cada `.zip` |
 
 Sem certificado o build sai com assinatura ad-hoc: abre direto no Mac em que foi compilado,
 e em qualquer outro o macOS bloqueia a primeira abertura. Para liberar, abra **Ajustes do
@@ -131,6 +137,21 @@ pnpm dist
 No lugar da chave de API servem um perfil do `notarytool` (`APPLE_KEYCHAIN_PROFILE`) ou
 `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` e `APPLE_TEAM_ID`. Nenhuma dessas credenciais
 entra no repositório.
+
+### Publicar uma versão
+
+O app instalado se atualiza a partir das releases do GitHub, então uma versão só chega a
+quem já usa o MacleanFy se a release levar os `.zip` e o `latest-mac.yml`. Depois de subir
+a versão no `package.json` e de rodar o `pnpm dist` assinado:
+
+```bash
+git tag v0.0.0 && git push origin v0.0.0
+gh release create v0.0.0 --verify-tag dist/MacleanFy-*.dmg dist/MacleanFy-*.zip \
+  dist/MacleanFy-*.zip.blockmap dist/latest-mac.yml
+```
+
+A atualização só é aceita com a mesma assinatura *Developer ID* do app instalado: um
+build ad-hoc ou de outro certificado é recusado pelo macOS.
 
 ### Acesso Total ao Disco
 

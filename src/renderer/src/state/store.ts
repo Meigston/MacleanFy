@@ -9,6 +9,7 @@ import type {
   ScanResultDTO,
   SystemInfo,
   UninstallResultDTO,
+  UpdateState,
 } from '../../../shared/api';
 import { initialLocale, persistLocale, type Locale } from '../i18n/locale';
 import { ALL_CATEGORY_IDS, type GroupRoute } from '../lib/catalog';
@@ -59,6 +60,10 @@ interface State {
   appsProgress: AppsProgress | null;
   appSelection: ReadonlySet<string>;
 
+  update: UpdateState;
+  /** O aviso de atualização está aberto? Abre sozinho uma vez por versão e quando ela fica pronta. */
+  updatePrompt: boolean;
+
   init(): Promise<void>;
   setLocale(locale: Locale): void;
   navigate(route: Route): void;
@@ -70,6 +75,7 @@ interface State {
   loadApps(): Promise<void>;
   toggleApp(path: string): void;
   uninstallSelected(): Promise<UninstallResultDTO>;
+  setUpdatePrompt(open: boolean): void;
 }
 
 /**
@@ -83,6 +89,8 @@ function defaultSelection(result: ScanResultDTO): ReadonlySet<string> {
 }
 
 let subscribed = false;
+/** Versão que já teve o aviso aberto nesta sessão: fechar com "Depois" vale até o app reabrir. */
+let promptedVersion: string | null = null;
 
 export const useStore = create<State>((set, get) => ({
   locale: initialLocale(),
@@ -106,6 +114,9 @@ export const useStore = create<State>((set, get) => ({
   appsProgress: null,
   appSelection: new Set(),
 
+  update: { status: 'idle' },
+  updatePrompt: false,
+
   async init() {
     if (!subscribed) {
       subscribed = true;
@@ -120,6 +131,22 @@ export const useStore = create<State>((set, get) => ({
       });
       window.macleanfy.clean.onProgress((cleanProgress) => set({ cleanProgress }));
       window.macleanfy.apps.onProgress((appsProgress) => set({ appsProgress }));
+
+      const receive = (update: UpdateState) =>
+        set((state) => {
+          let { updatePrompt } = state;
+          if (update.status === 'available' && update.version !== promptedVersion) {
+            promptedVersion = update.version;
+            updatePrompt = true;
+          } else if (update.status === 'ready' && state.update.status !== 'ready') {
+            updatePrompt = true;
+          } else if (update.status === 'current' || update.status === 'idle') {
+            updatePrompt = false;
+          }
+          return { update, updatePrompt };
+        });
+      window.macleanfy.updates.onChange(receive);
+      void window.macleanfy.updates.state().then(receive);
     }
     await get().refresh();
   },
@@ -205,6 +232,10 @@ export const useStore = create<State>((set, get) => ({
     const result = await window.macleanfy.apps.uninstall([...get().appSelection]);
     await Promise.all([get().loadApps(), get().refresh()]);
     return result;
+  },
+
+  setUpdatePrompt(open) {
+    set({ updatePrompt: open });
   },
 }));
 

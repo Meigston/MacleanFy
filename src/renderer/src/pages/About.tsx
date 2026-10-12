@@ -1,7 +1,7 @@
 import { CircleAlert, CircleCheck, CircleUserRound, ExternalLink, Heart, Languages, Lock, Scale } from 'lucide-react';
 import airdroidfyUrl from '../assets/airdroidfy.png';
 import logoUrl from '../assets/logo.webp';
-import { Button } from '../components/ui';
+import { Button, Spinner } from '../components/ui';
 import { LOCALES, useT } from '../i18n';
 import { useStore } from '../state/store';
 
@@ -9,6 +9,63 @@ const REPO_URL = 'https://github.com/Meigston/MacleanFy';
 const UPSTREAM_URL = 'https://github.com/guhcostan/mac-cleaner-cli';
 const DEVELOPER = { name: 'Meigston Ramos', linkedin: 'https://www.linkedin.com/in/meigston/' };
 const AIRDROIDFY_URL = 'https://airdroidfy.com/?ref=macleanfy';
+
+/** Onde está a atualização, com o próximo passo ao lado. Sem nada a mostrar rodando do código-fonte. */
+function UpdateStatus() {
+  const { t } = useT();
+  const update = useStore((state) => state.update);
+
+  const check = () => void window.macleanfy.updates.check();
+  const prompt = () => useStore.getState().setUpdatePrompt(true);
+
+  let text = '';
+  let action: { label: string; run(): void } | null = null;
+  switch (update.status) {
+    case 'unsupported':
+      return null;
+    case 'idle':
+      action = { label: t('update.check'), run: check };
+      break;
+    case 'checking':
+      text = t('update.checking');
+      break;
+    case 'current':
+      text = t('update.current');
+      action = { label: t('update.action.again'), run: check };
+      break;
+    case 'available':
+      text = t('update.available', { version: update.version });
+      action = { label: t('update.action.update'), run: prompt };
+      break;
+    case 'downloading':
+      text = t('update.downloading', {
+        version: update.version,
+        percent: update.total > 0 ? Math.floor((update.transferred / update.total) * 100) : 0,
+      });
+      action = { label: t('update.action.progress'), run: prompt };
+      break;
+    case 'ready':
+      text = t('update.ready', { version: update.version });
+      action = { label: t('update.action.restart'), run: prompt };
+      break;
+    case 'error':
+      text = t('update.error');
+      action = { label: t('update.action.retry'), run: check };
+      break;
+  }
+
+  return (
+    <p className="about__update">
+      {update.status === 'checking' && <Spinner size={13} />}
+      {text && <span>{text}</span>}
+      {action && (
+        <button type="button" className="link" data-action="update" onClick={action.run}>
+          {action.label}
+        </button>
+      )}
+    </p>
+  );
+}
 
 export function About() {
   const { t, locale } = useT();
@@ -26,6 +83,7 @@ export function About() {
           <p className="page__meta">
             {system ? t('about.version', { version: system.appVersion, os: system.osVersion }) : ''}
           </p>
+          <UpdateStatus />
         </header>
 
         <div className="about__grid">

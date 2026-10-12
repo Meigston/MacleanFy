@@ -145,6 +145,36 @@ export const pt = {
   'about.more.text':
     'Arquivos, tela e câmera entre o Android e o Mac, pela rede da sua casa e sem nuvem. App pago, com teste grátis.',
 
+  'update.check': 'Buscar atualizações',
+  'update.checking': 'Buscando atualizações…',
+  'update.current': 'Você tem a versão mais recente.',
+  'update.available': 'Versão {version} disponível.',
+  'update.downloading': 'Baixando a versão {version}… {percent}%',
+  'update.ready': 'Versão {version} pronta para instalar.',
+  'update.error': 'Não foi possível buscar atualizações.',
+  'update.action.again': 'Buscar de novo',
+  'update.action.update': 'Atualizar',
+  'update.action.progress': 'Ver andamento',
+  'update.action.restart': 'Reiniciar e instalar',
+  'update.action.retry': 'Tentar de novo',
+  'dialog.update.title': 'MacleanFy {version} disponível',
+  'dialog.update.text':
+    'Você tem a versão {current}. A nova é baixada do GitHub, conferida e instalada quando o app reinicia.',
+  'dialog.update.notes': 'Ver o que mudou',
+  'dialog.update.later': 'Depois',
+  'dialog.update.confirm': 'Atualizar agora',
+  'dialog.update.downloading': 'Baixando a versão {version}…',
+  'dialog.update.progress': '{done} de {total}',
+  'dialog.update.hide': 'Continuar em segundo plano',
+  'dialog.update.ready.title': 'Versão {version} pronta para instalar',
+  'dialog.update.ready.text':
+    'O MacleanFy fecha, instala e abre de novo. Se deixar para depois, ela entra quando você fechar o app.',
+  'dialog.update.restart': 'Reiniciar agora',
+  'dialog.update.error.title': 'Não foi possível atualizar',
+  'dialog.update.error.text':
+    'Tente de novo em alguns minutos. Se continuar, baixe a versão nova em macleanfy.com.',
+  'dialog.update.close': 'Fechar',
+
   'safety.safe': 'Seguro',
   'safety.moderate': 'Moderado',
   'safety.risky': 'Arriscado',
@@ -301,6 +331,36 @@ export const en: Record<StringKey, string> = {
   'about.more.title': 'From the same developer',
   'about.more.text':
     'Files, screen and camera between Android and your Mac, over your home network, with no cloud. Paid app, with a free trial.',
+
+  'update.check': 'Check for updates',
+  'update.checking': 'Checking for updates…',
+  'update.current': 'You have the latest version.',
+  'update.available': 'Version {version} is available.',
+  'update.downloading': 'Downloading version {version}… {percent}%',
+  'update.ready': 'Version {version} is ready to install.',
+  'update.error': 'Could not check for updates.',
+  'update.action.again': 'Check again',
+  'update.action.update': 'Update',
+  'update.action.progress': 'See progress',
+  'update.action.restart': 'Restart and install',
+  'update.action.retry': 'Try again',
+  'dialog.update.title': 'MacleanFy {version} is available',
+  'dialog.update.text':
+    'You have version {current}. The new one is downloaded from GitHub, verified and installed when the app restarts.',
+  'dialog.update.notes': 'See what changed',
+  'dialog.update.later': 'Later',
+  'dialog.update.confirm': 'Update now',
+  'dialog.update.downloading': 'Downloading version {version}…',
+  'dialog.update.progress': '{done} of {total}',
+  'dialog.update.hide': 'Continue in the background',
+  'dialog.update.ready.title': 'Version {version} is ready to install',
+  'dialog.update.ready.text':
+    'MacleanFy quits, installs and opens again. If you leave it for later, it is installed when you quit the app.',
+  'dialog.update.restart': 'Restart now',
+  'dialog.update.error.title': 'Could not update',
+  'dialog.update.error.text':
+    'Try again in a few minutes. If it keeps failing, download the new version from macleanfy.com.',
+  'dialog.update.close': 'Close',
 
   'safety.safe': 'Safe',
   'safety.moderate': 'Moderate',

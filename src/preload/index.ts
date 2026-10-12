@@ -35,6 +35,13 @@ const api: MacleanFyApi = {
   maintenance: {
     run: (task) => ipcRenderer.invoke(CHANNELS.maintenanceRun, task),
   },
+  updates: {
+    state: () => ipcRenderer.invoke(CHANNELS.updateState),
+    check: () => ipcRenderer.invoke(CHANNELS.updateCheck),
+    download: () => ipcRenderer.invoke(CHANNELS.updateDownload),
+    install: () => ipcRenderer.invoke(CHANNELS.updateInstall),
+    onChange: (listener) => subscribe(CHANNELS.updateChanged, listener),
+  },
 };
 
 contextBridge.exposeInMainWorld('macleanfy', api);

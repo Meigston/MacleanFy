@@ -62,6 +62,11 @@ your Library, and moves everything to the Trash.
 
 **Maintenance.** Flush the DNS cache and free purgeable space.
 
+**Updates.** The app checks the project's releases on GitHub when it opens and once a day,
+without sending any of your data. When there is a new version it tells you; it only
+downloads if you ask, and installs on restart. You can check right away under *About &
+settings*.
+
 ## Safety
 
 A cleaner deletes files. These are the guards:
@@ -98,12 +103,14 @@ pnpm dev
 pnpm dist
 ```
 
-It creates two installers in `dist/`:
+For each architecture, `dist/` gets the installer people download and the package the
+installed app uses to update itself:
 
 | File | For |
 | --- | --- |
-| `MacleanFy-arm64.dmg` | Apple Silicon Macs (M1 or later) |
-| `MacleanFy-x64.dmg` | Intel Macs |
+| `MacleanFy-arm64.dmg` and `MacleanFy-arm64.zip` | Apple Silicon Macs (M1 or later) |
+| `MacleanFy-x64.dmg` and `MacleanFy-x64.zip` | Intel Macs |
+| `latest-mac.yml` | tells the app which version is new and the SHA-512 of each `.zip` |
 
 Without a certificate the build is ad-hoc signed: it opens right away on the Mac that
 compiled it, and on any other Mac macOS blocks the first launch. To allow it, open **System
@@ -128,6 +135,21 @@ pnpm dist
 Instead of the API key you can use a `notarytool` profile (`APPLE_KEYCHAIN_PROFILE`) or
 `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`. None of these credentials
 belong in the repository.
+
+### Publishing a version
+
+The installed app updates itself from the GitHub releases, so a version only reaches people
+who already use MacleanFy if the release carries the `.zip` files and `latest-mac.yml`.
+After bumping the version in `package.json` and running the signed `pnpm dist`:
+
+```bash
+git tag v0.0.0 && git push origin v0.0.0
+gh release create v0.0.0 --verify-tag dist/MacleanFy-*.dmg dist/MacleanFy-*.zip \
+  dist/MacleanFy-*.zip.blockmap dist/latest-mac.yml
+```
+
+An update is only accepted with the same *Developer ID* signature as the installed app: an
+ad-hoc build, or one signed with another certificate, is refused by macOS.
 
 ### Full Disk Access
 

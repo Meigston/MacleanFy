@@ -91,6 +91,23 @@
   color: var(--accent-100);
 }
 
+/* Ponto que avisa de uma versão nova esperando. */
+.sidebar__item--badge {
+  position: relative;
+}
+
+.sidebar__item--badge::after {
+  content: '';
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-300);
+  box-shadow: var(--glow-sm);
+}
+
 /* ---------------------------------------------------------------------------
  * Página
  * ------------------------------------------------------------------------- */
@@ -1108,6 +1125,20 @@
 .about__tagline {
   color: var(--text-secondary);
   font-size: 14px;
+}
+
+.about__update {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.update__notes {
+  margin-top: 12px;
 }
 
 .about__grid {

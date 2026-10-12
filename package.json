@@ -30,7 +30,7 @@
     "dmg:background": "electron scripts/make-dmg-background.cjs",
     "pix:qr": "node scripts/make-pix-qr.cjs",
     "site:build": "node site/build.mjs",
-    "dist": "electron-vite build && electron-builder --mac"
+    "dist": "electron-vite build && electron-builder --mac --publish never"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -41,6 +41,7 @@
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",
+    "electron-updater": "^6.8.9",
     "electron-vite": "^5.0.0",
     "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",

@@ -25,6 +25,11 @@ export const CHANNELS = {
   openExternal: 'shell:open-external',
   reveal: 'shell:reveal',
   copyPixCode: 'support:copy-pix',
+  updateState: 'update:state',
+  updateChanged: 'update:changed',
+  updateCheck: 'update:check',
+  updateDownload: 'update:download',
+  updateInstall: 'update:install',
 } as const;
 
 export interface ItemDTO {
@@ -146,6 +151,22 @@ export interface MaintenanceResultDTO {
   error?: string;
 }
 
+/**
+ * Em que pé está a atualização do app. Quem decide é o processo principal; a
+ * interface só mostra e pede o próximo passo.
+ */
+export type UpdateState =
+  /** Rodando do código-fonte: não há instalação para atualizar. */
+  | { status: 'unsupported' }
+  | { status: 'idle' }
+  | { status: 'checking' }
+  | { status: 'current'; checkedAt: number }
+  | { status: 'available'; version: string }
+  | { status: 'downloading'; version: string; transferred: number; total: number }
+  /** Baixada e conferida; entra quando o app reiniciar ou for fechado. */
+  | { status: 'ready'; version: string }
+  | { status: 'error' };
+
 export type Unsubscribe = () => void;
 
 export interface MacleanFyApi {
@@ -176,5 +197,14 @@ export interface MacleanFyApi {
   };
   maintenance: {
     run(task: MaintenanceTask): Promise<MaintenanceResultDTO>;
+  };
+  updates: {
+    state(): Promise<UpdateState>;
+    /** Busca pedida por quem usa: sempre termina num estado que a tela mostra. */
+    check(): Promise<void>;
+    download(): Promise<void>;
+    /** Fecha o app, instala a versão baixada e abre de novo. */
+    install(): Promise<void>;
+    onChange(listener: (state: UpdateState) => void): Unsubscribe;
   };
 }

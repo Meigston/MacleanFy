@@ -13,6 +13,8 @@ export function Sidebar() {
   const tr = useT();
   const route = useStore((state) => state.route);
   const navigate = useStore((state) => state.navigate);
+  // Quem fechou o aviso de versão nova continua vendo, no ícone do Sobre, que ela existe.
+  const hasUpdate = useStore((state) => state.update.status === 'available' || state.update.status === 'ready');
 
   const sections: Entry[][] = [
     [
@@ -30,7 +32,9 @@ export function Sidebar() {
     <button
       key={target}
       type="button"
-      className={`sidebar__item${route === target ? ' sidebar__item--active' : ''}`}
+      className={`sidebar__item${route === target ? ' sidebar__item--active' : ''}${
+        target === 'about' && hasUpdate ? ' sidebar__item--badge' : ''
+      }`}
       aria-label={label}
       aria-current={route === target ? 'page' : undefined}
       data-tip={label}

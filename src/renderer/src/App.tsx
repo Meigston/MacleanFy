@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Tooltip } from './components/Tooltip';
+import { UpdateDialog } from './components/UpdateDialog';
 import { GROUPS } from './lib/catalog';
 import { About } from './pages/About';
 import { Cleaner } from './pages/Cleaner';
@@ -34,6 +35,8 @@ export function App() {
   const locale = useStore((state) => state.locale);
   // A captura de tela (ferramenta de desenvolvimento) espera este sinal baixar.
   const busy = useStore((state) => state.system === null || state.scanning || state.appsLoading);
+  // O aviso de atualização espera a limpeza acabar: ela tem o próprio diálogo, e um não cobre o outro.
+  const updatePrompt = useStore((state) => state.updatePrompt && !state.cleaning);
 
   useEffect(() => {
     void useStore.getState().init();
@@ -54,6 +57,7 @@ export function App() {
       <main className="app__main" key={route}>
         <Page route={route} />
       </main>
+      {updatePrompt && <UpdateDialog />}
       <Tooltip />
     </div>
   );

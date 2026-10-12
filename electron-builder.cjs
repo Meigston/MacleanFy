@@ -1,7 +1,8 @@
 /*
  * Empacotamento do MacleanFy.
  *
- *   pnpm dist      gera dist/MacleanFy-arm64.dmg e dist/MacleanFy-x64.dmg
+ *   pnpm dist      gera, para arm64 e x64, o instalador (.dmg) e o pacote de atualização
+ *                  (.zip), mais o dist/latest-mac.yml que diz ao app qual é a versão nova
  *
  * Sem variáveis de ambiente o app sai com assinatura ad-hoc: qualquer pessoa compila e
  * roda o que compilou. O instalador que vai a público precisa de um certificado
@@ -48,8 +49,12 @@ module.exports = {
     category: 'public.app-category.utilities',
     icon: 'build/icon.icns',
     // Um instalador por arquitetura: o universal dobraria o tamanho de um app cuja
-    // razão de existir é liberar espaço.
-    target: [{ target: 'dmg', arch: ['arm64', 'x64'] }],
+    // razão de existir é liberar espaço. O .dmg é o que a pessoa baixa; o .zip é o que o
+    // app instalado baixa para se atualizar.
+    target: [
+      { target: 'dmg', arch: ['arm64', 'x64'] },
+      { target: 'zip', arch: ['arm64', 'x64'] },
+    ],
     // Sem a versão no nome, o link "releases/latest/download/..." do README vale para sempre.
     artifactName: '${productName}-${arch}.${ext}',
     // "-" é assinatura ad-hoc. Com Developer ID a chave fica de fora para o
@@ -73,9 +78,18 @@ module.exports = {
       { x: 180, y: 190 },
       { x: 480, y: 190, type: 'link', path: '/Applications' },
     ],
-    // Sem atualização automática, o .blockmap não tem quem o leia.
+    // A atualização usa o .zip. E o .dmg ainda muda depois de pronto (o gancho abaixo o
+    // assina e grampeia), então um hash dele no latest-mac.yml nasceria errado.
     writeUpdateInfo: false,
   },
+
+  // De onde o app instalado busca versões novas. Nada é enviado daqui: `pnpm dist` só gera
+  // os arquivos, e quem publica a release é uma pessoa.
+  // MACLEANFY_UPDATE_FEED troca o endereço na hora do build, para ensaiar uma atualização
+  // contra um servidor local antes de publicar.
+  publish: process.env.MACLEANFY_UPDATE_FEED
+    ? { provider: 'generic', url: process.env.MACLEANFY_UPDATE_FEED }
+    : { provider: 'github', owner: 'Meigston', repo: 'MacleanFy' },
 
   // O electron-builder assina e notariza o app, mas o .dmg que o embrulha sai sem
   // assinatura. É o .dmg que a pessoa baixa, então ele também é assinado, notarizado e
