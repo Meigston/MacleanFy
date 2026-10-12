@@ -20,8 +20,8 @@ const FULL_DISK_ACCESS_URL = 'x-apple.systempreferences:com.apple.preference.sec
 /** O ícone aparece a 38px; o dobro cobre telas Retina. */
 const APP_ICON_SIZE = { width: 76, height: 76 };
 
-/** Só o que o próprio app aponta: o repositório, o projeto de origem e afins. */
-const EXTERNAL_ALLOWLIST = ['https://github.com/'];
+/** Só o que o próprio app aponta: o repositório, o projeto de origem e o perfil de quem o desenvolve. */
+const EXTERNAL_ALLOWLIST = ['https://github.com/', 'https://www.linkedin.com/in/meigston/'];
 
 function isCategoryId(value: unknown): value is CategoryId {
   return typeof value === 'string' && value in CATEGORIES;

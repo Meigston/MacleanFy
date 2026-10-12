@@ -1069,6 +1069,20 @@
   font-weight: 500;
 }
 
+/* Com cinco cartões o último ocupa a linha inteira, em vez de sobrar sozinho numa coluna. */
+.about__card--wide {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.about__name {
+  font-size: 17px;
+  font-weight: 500;
+  user-select: text;
+}
+
 .about__title svg {
   color: var(--accent-300);
 }

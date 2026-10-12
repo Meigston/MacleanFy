@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, ExternalLink, Heart, Languages, Lock, Scale } from 'lucide-react';
+import { CircleAlert, CircleCheck, CircleUserRound, ExternalLink, Heart, Languages, Lock, Scale } from 'lucide-react';
 import logoUrl from '../assets/logo.webp';
 import { Button } from '../components/ui';
 import { LOCALES, useT } from '../i18n';
@@ -6,6 +6,7 @@ import { useStore } from '../state/store';
 
 const REPO_URL = 'https://github.com/Meigston/MacleanFy';
 const UPSTREAM_URL = 'https://github.com/guhcostan/mac-cleaner-cli';
+const DEVELOPER = { name: 'Meigston Ramos', linkedin: 'https://www.linkedin.com/in/meigston/' };
 
 export function About() {
   const { t, locale } = useT();
@@ -26,6 +27,19 @@ export function About() {
         </header>
 
         <div className="about__grid">
+          <article className="card about__card">
+            <h2 className="about__title">
+              <CircleUserRound size={16} />
+              {t('about.dev.title')}
+            </h2>
+            <p className="about__name">{DEVELOPER.name}</p>
+            <p className="about__text">{t('about.dev.text')}</p>
+            <button type="button" className="link" onClick={() => open(DEVELOPER.linkedin)}>
+              LinkedIn
+              <ExternalLink size={13} />
+            </button>
+          </article>
+
           <article className="card about__card about__card--credit">
             <h2 className="about__title">
               <Heart size={16} />
@@ -70,7 +84,7 @@ export function About() {
             </Button>
           </article>
 
-          <article className="card about__card">
+          <article className="card about__card about__card--wide">
             <h2 className="about__title">
               <Languages size={16} />
               {t('about.language')}

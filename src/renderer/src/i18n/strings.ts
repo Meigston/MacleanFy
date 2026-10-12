@@ -108,12 +108,14 @@ export const pt = {
 
   'about.tagline': 'Limpeza do Mac com interface gráfica, de código aberto.',
   'about.version': 'Versão {version} · macOS {os}',
+  'about.dev.title': 'Desenvolvedor',
+  'about.dev.text': 'Criou e mantém o MacleanFy.',
   'about.based.title': 'Baseado no mac-cleaner-cli',
   'about.based.text':
     'Os scanners e as regras de segurança do MacleanFy vêm do mac-cleaner-cli, de guhcostan, publicado sob a licença MIT. Obrigado a quem construiu a base.',
   'about.based.link': 'guhcostan/mac-cleaner-cli',
   'about.repo.title': 'Código aberto',
-  'about.repo.text': 'O MacleanFy é feito pela comunidade. Reporte um problema, sugira uma categoria ou mande um pull request.',
+  'about.repo.text': 'O MacleanFy é aberto à comunidade. Reporte um problema, sugira uma categoria ou mande um pull request.',
   'about.repo.link': 'Repositório no GitHub',
   'about.fda.title': 'Acesso Total ao Disco',
   'about.fda.granted': 'Concedido — a análise enxerga a Lixeira, o Mail e o Safari.',
@@ -241,12 +243,14 @@ export const en: Record<StringKey, string> = {
 
   'about.tagline': 'An open source Mac cleaner with a graphical interface.',
   'about.version': 'Version {version} · macOS {os}',
+  'about.dev.title': 'Developer',
+  'about.dev.text': 'Created and maintains MacleanFy.',
   'about.based.title': 'Based on mac-cleaner-cli',
   'about.based.text':
     'MacleanFy’s scanners and safety rules come from mac-cleaner-cli by guhcostan, released under the MIT license. Thanks to everyone who built the foundation.',
   'about.based.link': 'guhcostan/mac-cleaner-cli',
   'about.repo.title': 'Open source',
-  'about.repo.text': 'MacleanFy is built by the community. Report an issue, suggest a category or send a pull request.',
+  'about.repo.text': 'MacleanFy is open to the community. Report an issue, suggest a category or send a pull request.',
   'about.repo.link': 'GitHub repository',
   'about.fda.title': 'Full Disk Access',
   'about.fda.granted': 'Granted — the scan can see the Trash, Mail and Safari.',
