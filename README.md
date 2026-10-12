@@ -211,8 +211,8 @@ Apple Pay ou Google Pay.
 
 ## Licença
 
-[MIT](LICENSE). Partes do código vêm do mac-cleaner-cli, também sob MIT — veja
-[NOTICE.md](NOTICE.md).
+[MIT](LICENSE), © 2026 [Meigston Ramos](https://www.linkedin.com/in/meigston/). Partes do
+código vêm do mac-cleaner-cli, também sob MIT — veja [NOTICE.md](NOTICE.md).
 
 O MacleanFy apaga arquivos. É distribuído sem garantia: confira a lista antes de confirmar e
 mantenha um backup do que importa.

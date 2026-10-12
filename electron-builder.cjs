@@ -15,7 +15,7 @@ const developerId = Boolean(process.env.CSC_NAME || process.env.CSC_LINK);
 module.exports = {
   appId: 'dev.macleanfy.app',
   productName: 'MacleanFy',
-  copyright: 'Copyright © 2026 MacleanFy contributors',
+  copyright: 'Copyright © 2026 Meigston Ramos',
 
   directories: {
     output: 'dist',
@@ -43,7 +43,7 @@ module.exports = {
     hardenedRuntime: developerId,
     extendInfo: {
       LSMinimumSystemVersion: '12.0',
-      NSHumanReadableCopyright: 'Copyright © 2026 MacleanFy contributors. Baseado no mac-cleaner-cli (MIT).',
+      NSHumanReadableCopyright: 'Copyright © 2026 Meigston Ramos. Baseado no mac-cleaner-cli (MIT).',
     },
   },
 

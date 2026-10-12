@@ -184,8 +184,8 @@ Pix code for another amount, which you choose in your bank app:
 
 ## License
 
-[MIT](LICENSE). Parts of the code come from mac-cleaner-cli, also MIT — see
-[NOTICE.md](NOTICE.md).
+[MIT](LICENSE), © 2026 [Meigston Ramos](https://www.linkedin.com/in/meigston/). Parts of the
+code come from mac-cleaner-cli, also MIT — see [NOTICE.md](NOTICE.md).
 
 MacleanFy deletes files. It is provided without warranty: review the list before confirming
 and keep a backup of what matters.
