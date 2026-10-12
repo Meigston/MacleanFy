@@ -15,6 +15,8 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * `MACLEANFY_CAPTURE_SCRIPT` roda na página antes da foto — para abrir um
  * diálogo ou expandir uma linha, por exemplo. Passos separados por uma linha
  * com `---` rodam um de cada vez, esperando a interface sossegar entre eles.
+ * `MACLEANFY_CAPTURE_HOVER` leva o mouse até o elemento do seletor, para
+ * fotografar uma dica aberta.
  */
 export function captureWhenIdle(win: BrowserWindow, file: string): void {
   win.webContents.once('did-finish-load', async () => {
@@ -35,6 +37,18 @@ export function captureWhenIdle(win: BrowserWindow, file: string): void {
         if (!step.trim()) continue;
         await win.webContents.executeJavaScript(step);
         await waitIdle();
+      }
+
+      const hover = process.env.MACLEANFY_CAPTURE_HOVER;
+      if (hover) {
+        const point = (await win.webContents.executeJavaScript(`(() => {
+          const box = document.querySelector(${JSON.stringify(hover)})?.getBoundingClientRect();
+          return box ? { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) } : null;
+        })()`)) as { x: number; y: number } | null;
+        if (point) {
+          win.webContents.sendInputEvent({ type: 'mouseMove', ...point });
+          await sleep(SETTLE_MS);
+        }
       }
 
       const image = await win.webContents.capturePage();

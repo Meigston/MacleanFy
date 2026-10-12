@@ -321,17 +321,13 @@ button {
  * Dica ao passar o mouse
  * ------------------------------------------------------------------------- */
 
-[data-tip] {
-  position: relative;
-}
-
-[data-tip]:hover::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: 50%;
-  left: calc(100% + 10px);
-  z-index: 60;
-  transform: translateY(-50%);
+/* Desenhada pelo componente Tooltip: por cima de tudo, até do diálogo, e fora dos cartões. */
+.tip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 200;
+  visibility: hidden;
   width: max-content;
   max-width: 280px;
   padding: 6px 10px;
@@ -345,26 +341,7 @@ button {
   font-weight: 400;
   line-height: 1.4;
   text-align: left;
-  white-space: normal;
   pointer-events: none;
-}
-
-[data-tip][data-tip-pos='top']:hover::after {
-  top: auto;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-[data-tip][data-tip-pos='bottom']:hover::after {
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-[data-tip][data-tip-pos='left']:hover::after {
-  right: calc(100% + 10px);
-  left: auto;
 }
 
 /* ---------------------------------------------------------------------------
@@ -472,14 +449,6 @@ button {
   align-items: center;
   gap: 4px;
   padding: 12px 0 4px;
-.result__progress {
-  margin-top: -6px;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
   text-align: center;
 }
 
@@ -501,6 +470,14 @@ button {
   font-size: 24px;
   font-weight: 500;
   line-height: 1.2;
+}
+
+.result__progress {
+  margin-top: -6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 @keyframes fade {

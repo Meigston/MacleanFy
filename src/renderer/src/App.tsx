@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
+import { Tooltip } from './components/Tooltip';
 import { GROUPS } from './lib/catalog';
 import { About } from './pages/About';
 import { Cleaner } from './pages/Cleaner';
@@ -53,6 +54,7 @@ export function App() {
       <main className="app__main" key={route}>
         <Page route={route} />
       </main>
+      <Tooltip />
     </div>
   );
 }
