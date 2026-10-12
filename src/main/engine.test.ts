@@ -164,7 +164,58 @@ describe('Engine', () => {
       expect(summary.dryRun).toBe(false);
       expect(await exists(join(root, 'remove.log'))).toBe(false);
       expect(await exists(join(root, 'keep.log'))).toBe(true);
-      expect(progress).toEqual(['system-logs', undefined]);
+      expect(progress[0]).toBe('system-logs');
+      expect(progress.at(-1)).toBeUndefined();
+    });
+
+    it('reports the bytes removed as it goes, from zero to the whole selection', async () => {
+      const logs = join(root, 'logs');
+      const caches = join(root, 'caches');
+      await mkdir(join(logs, 'old', 'deep'), { recursive: true });
+      await mkdir(caches);
+      await writeFile(join(logs, 'old', 'a.log'), 'x'.repeat(3000));
+      await writeFile(join(logs, 'old', 'deep', 'b.log'), 'x'.repeat(2000));
+      await writeFile(join(caches, 'c.bin'), 'x'.repeat(1000));
+      const engine = new Engine({
+        'system-logs': new FolderScanner('system-logs', logs),
+        'system-cache': new FolderScanner('system-cache', caches),
+      });
+      const scanned = await engine.scan(undefined);
+      const selection = scanned.map((result) => ({
+        categoryId: result.categoryId,
+        paths: result.items.map((item) => item.path),
+      }));
+      const expected = scanned.reduce((sum, result) => sum + result.totalSize, 0);
+
+      const seen: Array<{ doneBytes: number; totalBytes: number }> = [];
+      const summary = await engine.clean(selection, {}, (p) => seen.push(p));
+
+      expect(summary.totalFreedSpace).toBe(expected);
+      expect(seen.every((p) => p.totalBytes === expected)).toBe(true);
+      expect(seen[0].doneBytes).toBe(0);
+      expect(seen.at(-1)?.doneBytes).toBe(expected);
+      // Nunca volta, e passa por pelo menos um ponto no meio do caminho.
+      expect(seen.map((p) => p.doneBytes)).toEqual([...seen.map((p) => p.doneBytes)].sort((a, b) => a - b));
+      expect(seen.some((p) => p.doneBytes > 0 && p.doneBytes < expected)).toBe(true);
+      expect(await exists(join(logs, 'old'))).toBe(false);
+      expect(await exists(join(caches, 'c.bin'))).toBe(false);
+    });
+
+    it('reports the selection whole on a dry run without deleting it', async () => {
+      await writeFile(join(root, 'stay.log'), 'x'.repeat(700));
+      const engine = new Engine({ 'system-logs': new FolderScanner('system-logs', root) });
+      await engine.scan(undefined);
+
+      const seen: number[] = [];
+      await engine.clean(
+        [{ categoryId: 'system-logs', paths: [join(root, 'stay.log')] }],
+        { dryRun: true },
+        (p) => seen.push(p.doneBytes)
+      );
+
+      expect(seen[0]).toBe(0);
+      expect(seen.at(-1)).toBe(700);
+      expect(await exists(join(root, 'stay.log'))).toBe(true);
     });
 
     it('ignores paths that did not come from the last scan', async () => {

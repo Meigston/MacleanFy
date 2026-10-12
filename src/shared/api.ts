@@ -79,6 +79,9 @@ export interface CleanProgress {
   /** Categoria em andamento; ausente no aviso final. */
   categoryId?: CategoryId;
 }
+  /** Bytes já apagados e o total escolhido: é por eles que a barra anda. */
+  doneBytes: number;
+  totalBytes: number;
 
 export interface SystemInfo {
   appVersion: string;

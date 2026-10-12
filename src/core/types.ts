@@ -74,7 +74,8 @@ export interface ScannerOptions {
 export interface Scanner {
   category: Category;
   scan(options?: ScannerOptions): Promise<ScanResult>;
-  clean(items: CleanableItem[], dryRun?: boolean): Promise<CleanResult>;
+  /** `onFreed` receives the bytes released as the removal goes, when the scanner can tell. */
+  clean(items: CleanableItem[], dryRun?: boolean, onFreed?: (bytes: number) => void): Promise<CleanResult>;
 }
 
 export const CATEGORIES: Record<CategoryId, Category> = {

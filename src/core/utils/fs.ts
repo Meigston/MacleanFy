@@ -1,4 +1,4 @@
-import { lstat, readdir, rm, access, unlink } from 'fs/promises';
+import { lstat, readdir, rm, rmdir, access, unlink } from 'fs/promises';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
 import type { CleanableItem } from '../types.js';
@@ -254,7 +254,88 @@ export async function getDirectoryItems(dirPath: string): Promise<CleanableItem[
  * 2. Re-checks file type immediately before deletion to prevent TOCTOU attacks
  * 3. Handles symlinks safely (removes symlink, not target)
  */
-export async function removeItem(path: string, dryRun = false): Promise<boolean> {
+/** Called with the bytes of each file as it is removed. */
+export type FreedFn = (bytes: number) => void;
+
+/** How many directories are emptied at the same time. */
+const REMOVE_WORKERS = 8;
+
+/** Resolves to undefined when the path is already gone, which is what a removal wants. */
+function unlessMissing<T>(operation: Promise<T>): Promise<T | undefined> {
+  return operation.catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined;
+    throw error;
+  });
+}
+
+/**
+ * Removes a directory from the inside out, reporting the bytes of each file as it goes,
+ * so a long removal can show real progress instead of jumping from nothing to done.
+ *
+ * Security: never follows a symlink. Links, files and anything that is not a real
+ * directory are unlinked; only real directories are listed.
+ */
+async function removeTree(root: string, onFreed: FreedFn): Promise<void> {
+  const pending = [root];
+  // Every directory found, parents before children: emptied first, removed at the end.
+  const directories: string[] = [];
+  let active = 0;
+  let failure: unknown;
+
+  const empty = async (dir: string): Promise<void> => {
+    // Re-check right before listing: it was a directory when its parent was read.
+    const own = await unlessMissing(lstat(dir));
+    if (!own) return;
+    if (!own.isDirectory()) {
+      await unlessMissing(unlink(dir));
+      return;
+    }
+
+    directories.push(dir);
+    for (const entry of (await unlessMissing(readdir(dir, { withFileTypes: true }))) ?? []) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(path);
+        continue;
+      }
+
+      const stats = await unlessMissing(lstat(path));
+      if (!stats) continue;
+      // Some filesystems do not tell the type when listing.
+      if (stats.isDirectory()) {
+        pending.push(path);
+        continue;
+      }
+      await unlessMissing(unlink(path));
+      onFreed(sizeOnDisk(stats));
+    }
+  };
+
+  await new Promise<void>((done) => {
+    const pump = (): void => {
+      while (failure === undefined && active < REMOVE_WORKERS && pending.length > 0) {
+        active++;
+        empty(pending.pop()!)
+          .catch((error: unknown) => {
+            failure ??= error ?? new Error('removal failed');
+          })
+          .finally(() => {
+            active--;
+            pump();
+          });
+      }
+      if (active === 0) done();
+    };
+    pump();
+  });
+  if (failure !== undefined) throw failure;
+
+  for (let i = directories.length - 1; i >= 0; i--) {
+    await unlessMissing(rmdir(directories[i]));
+  }
+}
+
+export async function removeItem(path: string, dryRun = false, onFreed?: FreedFn): Promise<boolean> {
   if (dryRun) {
     return true;
   }
@@ -274,8 +355,13 @@ export async function removeItem(path: string, dryRun = false): Promise<boolean>
     if (stats.isSymbolicLink()) {
       // For symlinks, only remove the symlink itself, never follow it
       await unlink(path);
-    } else {
+    } else if (!onFreed) {
       await rm(path, { recursive: true, force: true });
+    } else if (stats.isDirectory()) {
+      await removeTree(path, onFreed);
+    } else {
+      await unlink(path);
+      onFreed(sizeOnDisk(stats));
     }
     return true;
   } catch (error) {
@@ -291,7 +377,8 @@ export async function removeItem(path: string, dryRun = false): Promise<boolean>
 export async function removeItems(
   items: CleanableItem[],
   dryRun = false,
-  onProgress?: (current: number, total: number, item: CleanableItem) => void
+  onProgress?: (current: number, total: number, item: CleanableItem) => void,
+  onFreed?: FreedFn
 ): Promise<{ success: number; failed: number; freedSpace: number }> {
   let success = 0;
   let failed = 0;
@@ -301,7 +388,9 @@ export async function removeItems(
     const item = items[i];
     onProgress?.(i + 1, items.length, item);
 
-    const removed = await removeItem(item.path, dryRun);
+    const removed = await removeItem(item.path, dryRun, onFreed);
+    // A dry run removes nothing, so it reports each item whole.
+    if (dryRun) onFreed?.(item.size);
     if (removed) {
       success++;
       freedSpace += item.size;

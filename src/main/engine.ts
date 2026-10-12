@@ -14,6 +14,8 @@ import type {
 } from '../shared/api';
 
 const SCAN_CONCURRENCY = 4;
+/** Intervalo mínimo entre dois avisos de progresso da limpeza. */
+const PROGRESS_INTERVAL_MS = 80;
 
 /**
  * Um temporário só é oferecido para limpeza depois de um dia parado. Os scanners
@@ -137,22 +139,39 @@ export class Engine {
     const results: CleanResultDTO[] = [];
     const total = selection.length;
 
-    for (const { categoryId, paths } of selection) {
-      onProgress?.({ completed: results.length, total, categoryId });
-
-      const result: CleanResultDTO = { categoryId, cleanedItems: 0, freedSpace: 0, errors: [] };
+    // Só entra o que a última análise devolveu: a interface nunca dita caminhos.
+    const plan = selection.map(({ categoryId, paths }) => {
       const scanner = this.scanners[categoryId];
       const known = this.lastScan.get(categoryId);
-
-      // Só entra o que a última análise devolveu: a interface nunca dita caminhos.
       const items =
         scanner && known
           ? paths.map((path) => known.get(path)).filter((item): item is CleanableItem => item !== undefined)
           : [];
+      return { categoryId, scanner, items, bytes: items.reduce((sum, item) => sum + item.size, 0) };
+    });
+    const totalBytes = plan.reduce((sum, step) => sum + step.bytes, 0);
+
+    let settledBytes = 0;
+    let lastReport = 0;
+
+    for (const { categoryId, scanner, items, bytes } of plan) {
+      onProgress?.({ completed: results.length, total, categoryId, doneBytes: settledBytes, totalBytes });
+
+      const result: CleanResultDTO = { categoryId, cleanedItems: 0, freedSpace: 0, errors: [] };
 
       if (scanner && items.length > 0) {
+        // A remoção avisa a cada arquivo; a interface só precisa de alguns avisos por segundo.
+        let freed = 0;
+        const onFreed = (amount: number): void => {
+          freed = Math.min(freed + amount, bytes);
+          const now = Date.now();
+          if (now - lastReport < PROGRESS_INTERVAL_MS) return;
+          lastReport = now;
+          onProgress?.({ completed: results.length, total, categoryId, doneBytes: settledBytes + freed, totalBytes });
+        };
+
         try {
-          const cleaned = await scanner.clean(items, dryRun);
+          const cleaned = await scanner.clean(items, dryRun, onFreed);
           result.cleanedItems = cleaned.cleanedItems;
           result.freedSpace = cleaned.freedSpace;
           result.errors = cleaned.errors;
@@ -164,10 +183,11 @@ export class Engine {
         if (!dryRun) this.lastScan.delete(categoryId);
       }
 
+      settledBytes += bytes;
       results.push(result);
     }
 
-    onProgress?.({ completed: total, total });
+    onProgress?.({ completed: total, total, doneBytes: totalBytes, totalBytes });
 
     return {
       results,

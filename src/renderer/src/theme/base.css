@@ -472,6 +472,14 @@ button {
   align-items: center;
   gap: 4px;
   padding: 12px 0 4px;
+.result__progress {
+  margin-top: -6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
   text-align: center;
 }
 

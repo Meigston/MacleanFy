@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, writeFile, mkdir, rm, symlink, readFile, open, stat } from 'fs/promises';
+import { mkdtemp, writeFile, mkdir, rm, symlink, readFile, open, stat, chmod, lstat } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir, homedir } from 'os';
 import { 
@@ -11,6 +11,7 @@ import {
   isProtectedPath,
   validatePathSafety,
   removeItem,
+  removeItems,
   sizeOnDisk
 } from './fs.js';
 
@@ -318,6 +319,114 @@ describe('fs utils', () => {
 
 
 
+
+describe('removal with progress', () => {
+  let testDir: string;
+
+  beforeEach(async () => {
+    testDir = await mkdtemp(join(tmpdir(), 'mac-cleaner-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(testDir, { recursive: true, force: true });
+  });
+
+  /** A tree three levels deep with files at every level; returns the bytes it holds. */
+  async function buildTree(root: string): Promise<number> {
+    const files: string[] = [];
+    for (const dir of ['', 'a', 'a/b', 'a/b/c', 'd', 'empty']) {
+      await mkdir(join(root, dir), { recursive: true });
+      if (dir === 'empty') continue;
+      for (let i = 0; i < 4; i++) {
+        const file = join(root, dir, `file-${i}.bin`);
+        await writeFile(file, 'x'.repeat(1000 * (i + 1)));
+        files.push(file);
+      }
+    }
+    let bytes = 0;
+    for (const file of files) bytes += sizeOnDisk(await lstat(file));
+    return bytes;
+  }
+
+  it('removes a whole tree and reports every byte it held', async () => {
+    const root = join(testDir, 'cache');
+    const expected = await buildTree(root);
+    const reported: number[] = [];
+
+    expect(await removeItem(root, false, (bytes) => reported.push(bytes))).toBe(true);
+
+    expect(await exists(root)).toBe(false);
+    expect(reported).toHaveLength(20);
+    expect(reported.reduce((sum, bytes) => sum + bytes, 0)).toBe(expected);
+  });
+
+  it('reports the size of a single file', async () => {
+    const file = join(testDir, 'single.bin');
+    await writeFile(file, 'x'.repeat(5000));
+    const expected = sizeOnDisk(await lstat(file));
+    const reported: number[] = [];
+
+    expect(await removeItem(file, false, (bytes) => reported.push(bytes))).toBe(true);
+
+    expect(await exists(file)).toBe(false);
+    expect(reported).toEqual([expected]);
+  });
+
+  it('unlinks symlinks inside the tree without touching what they point to', async () => {
+    const outside = join(testDir, 'outside');
+    await mkdir(outside);
+    await writeFile(join(outside, 'keep.txt'), 'keep');
+    await writeFile(join(testDir, 'keep-file.txt'), 'keep');
+
+    const root = join(testDir, 'cache');
+    await mkdir(join(root, 'nested'), { recursive: true });
+    await writeFile(join(root, 'nested', 'gone.txt'), 'gone');
+    await symlink(outside, join(root, 'link-to-dir'));
+    await symlink(join(testDir, 'keep-file.txt'), join(root, 'nested', 'link-to-file'));
+
+    expect(await removeItem(root, false, () => {})).toBe(true);
+
+    expect(await exists(root)).toBe(false);
+    expect(await readFile(join(outside, 'keep.txt'), 'utf-8')).toBe('keep');
+    expect(await readFile(join(testDir, 'keep-file.txt'), 'utf-8')).toBe('keep');
+  });
+
+  it('reports failure and keeps what it could not read', async () => {
+    const root = join(testDir, 'cache');
+    await mkdir(join(root, 'locked'), { recursive: true });
+    await writeFile(join(root, 'locked', 'secret.txt'), 'secret');
+    await chmod(join(root, 'locked'), 0o000);
+
+    try {
+      expect(await removeItem(root, false, () => {})).toBe(false);
+    } finally {
+      await chmod(join(root, 'locked'), 0o755);
+    }
+
+    expect(await readFile(join(root, 'locked', 'secret.txt'), 'utf-8')).toBe('secret');
+  });
+
+  it('refuses protected paths with progress as it does without', async () => {
+    expect(await removeItem('/System', false, () => {})).toBe(false);
+    expect(await removeItem(homedir(), false, () => {})).toBe(false);
+  });
+
+  it('reports each item whole on a dry run and deletes nothing', async () => {
+    const root = join(testDir, 'cache');
+    await buildTree(root);
+    const items = [
+      { path: root, size: 4096, name: 'cache', isDirectory: true },
+      { path: join(testDir, 'missing'), size: 100, name: 'missing', isDirectory: false },
+    ];
+    const reported: number[] = [];
+
+    const result = await removeItems(items, true, undefined, (bytes) => reported.push(bytes));
+
+    expect(result).toEqual({ success: 2, failed: 0, freedSpace: 4196 });
+    expect(reported).toEqual([4096, 100]);
+    expect(await exists(join(root, 'a', 'b', 'c', 'file-3.bin'))).toBe(true);
+  });
+});
 
 describe('sizeOnDisk', () => {
   it('uses the apparent size of an ordinary file', () => {

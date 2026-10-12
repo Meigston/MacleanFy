@@ -1,13 +1,13 @@
 import type { Scanner, Category, ScanResult, CleanResult, CleanableItem, ScannerOptions } from '../types.js';
-import { removeItems } from '../utils/fs.js';
+import { removeItems, type FreedFn } from '../utils/fs.js';
 
 export abstract class BaseScanner implements Scanner {
   abstract category: Category;
 
   abstract scan(options?: ScannerOptions): Promise<ScanResult>;
 
-  async clean(items: CleanableItem[], dryRun = false): Promise<CleanResult> {
-    const result = await removeItems(items, dryRun);
+  async clean(items: CleanableItem[], dryRun = false, onFreed?: FreedFn): Promise<CleanResult> {
+    const result = await removeItems(items, dryRun, undefined, onFreed);
 
     return {
       category: this.category,

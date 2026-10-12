@@ -99,7 +99,13 @@ export function CleanDialog({ ids, onClose }: Props) {
 
   if (running) {
     const current = cleanProgress?.categoryId;
-    const done = cleanProgress ? cleanProgress.completed / Math.max(cleanProgress.total, 1) : 0;
+    const { doneBytes = 0, totalBytes = 0 } = cleanProgress ?? {};
+    // Sem bytes para contar (nada selecionado de fato), a barra anda por categoria.
+    const done = !cleanProgress
+      ? 0
+      : totalBytes > 0
+        ? doneBytes / totalBytes
+        : cleanProgress.completed / Math.max(cleanProgress.total, 1);
     return (
       <Modal labelledBy="clean-title">
         <div className="result">
@@ -111,6 +117,11 @@ export function CleanDialog({ ids, onClose }: Props) {
         <div className="meter meter--accent">
           <div className="meter__fill" style={{ width: `${done * 100}%` }} />
         </div>
+        {totalBytes > 0 && (
+          <p className="result__progress">
+            {t('dialog.clean.progress', { done: tr.size(doneBytes), total: tr.size(totalBytes) })}
+          </p>
+        )}
       </Modal>
     );
   }

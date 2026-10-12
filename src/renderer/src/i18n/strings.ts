@@ -77,6 +77,7 @@ export const pt = {
   'dialog.clean.confirm': 'Limpar agora',
   'dialog.clean.simulate': 'Simular',
   'dialog.clean.running': 'Limpando {name}…',
+  'dialog.clean.progress': '{done} de {total}',
   'dialog.clean.result': '{size} liberados',
   'dialog.clean.result.dryRun': '{size} seriam liberados',
   'dialog.clean.result.items': '{count} removidos',
@@ -230,6 +231,7 @@ export const en: Record<StringKey, string> = {
   'dialog.clean.result.items.dryRun': '{count} would be removed · nothing was deleted',
   'dialog.clean.result.errors': 'Some items could not be removed',
 
+  'dialog.clean.progress': '{done} of {total}',
   'uninstaller.subtitle': '{count} · {size}',
   'uninstaller.subtitle.loading': 'Measuring apps… {done}/{total}',
   'uninstaller.search': 'Search apps',
