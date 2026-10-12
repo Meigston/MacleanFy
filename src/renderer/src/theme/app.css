@@ -1013,14 +1013,12 @@
  * ------------------------------------------------------------------------- */
 
 .support {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-  gap: 16px;
+  display: flex;
 }
 
-/* O Pix ocupa a coluna da esquerda inteira; as outras duas opções dividem a direita. */
 .support__pix {
-  grid-row: 1 / span 2;
+  flex: 1;
+  max-width: 760px;
   gap: 18px;
 }
 

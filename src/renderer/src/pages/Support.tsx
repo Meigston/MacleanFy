@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy, CreditCard, ExternalLink, Globe, Heart, QrCode } from 'lucide-react';
+import { Check, Copy, QrCode } from 'lucide-react';
 import pixQrUrl from '../../../../assets/support/pix-qr.svg';
 import { SUPPORT, readPix } from '../../../shared/support';
 import { Button } from '../components/ui';
@@ -17,7 +17,6 @@ export function Support() {
     return () => clearTimeout(timer);
   }, [copied]);
 
-  const open = (url: string) => void window.macleanfy.system.openExternal(url);
   const copy = async () => {
     await window.macleanfy.system.copyPixCode();
     setCopied(true);
@@ -47,7 +46,9 @@ export function Support() {
                   Pix
                 </h2>
                 <p className="support__amount">
-                  {new Intl.NumberFormat(locale, { style: 'currency', currency: 'BRL' }).format(pix.amount)}
+                  {pix.amount === null
+                    ? t('support.pix.open')
+                    : new Intl.NumberFormat(locale, { style: 'currency', currency: 'BRL' }).format(pix.amount)}
                 </p>
                 <p className="task__meta">{t('support.pix.recipient', { name: pix.recipient })}</p>
                 <p className="task__text">{t('support.pix.text')}</p>
@@ -60,40 +61,6 @@ export function Support() {
             </div>
           </article>
         )}
-
-        <article className="card task">
-          <span className="support__scope">
-            <Globe size={13} />
-            {t('support.stripe.scope')}
-          </span>
-          <h2 className="task__title support__heading">
-            <CreditCard size={17} />
-            {t('support.stripe.title')}
-          </h2>
-          <p className="task__text">{t('support.stripe.text')}</p>
-          <div className="task__footer">
-            <Button variant="primary" icon={<ExternalLink size={15} />} onClick={() => open(SUPPORT.stripe)}>
-              {t('support.stripe.action')}
-            </Button>
-          </div>
-        </article>
-
-        <article className="card task">
-          <span className="support__scope">
-            <Globe size={13} />
-            {t('support.sponsors.scope')}
-          </span>
-          <h2 className="task__title support__heading">
-            <Heart size={17} />
-            GitHub Sponsors
-          </h2>
-          <p className="task__text">{t('support.sponsors.text')}</p>
-          <div className="task__footer">
-            <Button icon={<ExternalLink size={15} />} onClick={() => open(SUPPORT.sponsors)}>
-              {t('support.sponsors.action')}
-            </Button>
-          </div>
-        </article>
       </div>
     </section>
   );

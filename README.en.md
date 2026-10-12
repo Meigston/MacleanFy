@@ -128,26 +128,17 @@ The interface ships in Portuguese (Brazil) and English, following the system lan
 ## Support the project
 
 MacleanFy is free and open source. If it helped you, a contribution keeps the project going.
-In the app, the same options are on the **Support** screen.
-
-### 🌎 Stripe — outside Brazil
-
-**[Contribute through Stripe](https://donate.stripe.com/cNidR81zYdGPfZngEVgUM00)**: you choose the amount and pay in US dollars by card,
-Apple Pay or Google Pay.
-
-### GitHub Sponsors — any country
-
-**[Sponsor on GitHub](https://github.com/sponsors/Meigston)**: one-time or monthly support, through your GitHub account.
+In the app, the same option is on the **Support** screen.
 
 ### 🇧🇷 Pix — Brazil only
 
 <img src="assets/support/pix-qr.svg" width="220" alt="Pix QR code">
 
-**R$ 10.00** to Meigston da Silva Ramos. Open your bank app, choose to pay with Pix and point
-the camera at the QR code, or paste this code under *Pix copia e cola*:
+To Meigston da Silva Ramos, for any amount you choose. Open your bank app, choose to pay with
+Pix and point the camera at the QR code, or paste this code under *Pix copia e cola*:
 
 ```
-00020126580014BR.GOV.BCB.PIX01363da966f1-bd8d-488e-89a9-faadb0e5b63a520400005303986540510.005802BR5923Meigston da Silva Ramos6009SAO PAULO62140510wgZQvZ2KYU6304BF83
+00020126580014BR.GOV.BCB.PIX01363da966f1-bd8d-488e-89a9-faadb0e5b63a5204000053039865802BR5923Meigston da Silva Ramos6009SAO PAULO62070503***63042E26
 ```
 
 ## License

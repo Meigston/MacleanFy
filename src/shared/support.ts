@@ -1,13 +1,14 @@
 import data from './support.json';
 
 /**
- * Formas de apoiar o projeto. Os endereços ficam em support.json, que o script do QR
- * code também lê: depois de trocar o código Pix, rode `pnpm pix:qr`.
+ * Como apoiar o projeto. O código Pix fica em support.json, que o script do QR code
+ * também lê: depois de trocá-lo, rode `pnpm pix:qr`.
  */
 export const SUPPORT = data;
 
 export interface PixInfo {
-  amount: number;
+  /** null quando o código deixa quem paga escolher o valor. */
+  amount: number | null;
   recipient: string;
 }
 
@@ -42,7 +43,7 @@ export function readPix(payload: string): PixInfo | null {
   if (!body.endsWith('6304') || crc16(body) !== payload.slice(-4)) return null;
 
   const fields = parsePix(payload);
-  const amount = Number(fields['54']);
-  if (!fields['54'] || !Number.isFinite(amount) || !fields['59']) return null;
+  const amount = fields['54'] ? Number(fields['54']) : null;
+  if ((amount !== null && !Number.isFinite(amount)) || !fields['59']) return null;
   return { amount, recipient: fields['59'] };
 }
