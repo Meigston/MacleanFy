@@ -14,6 +14,7 @@ const api: MacleanFyApi = {
     openFullDiskAccessSettings: () => ipcRenderer.invoke(CHANNELS.openFullDiskAccess),
     openExternal: (url) => ipcRenderer.invoke(CHANNELS.openExternal, url),
     reveal: (path) => ipcRenderer.invoke(CHANNELS.reveal, path),
+    copyPixCode: () => ipcRenderer.invoke(CHANNELS.copyPixCode),
   },
   history: {
     get: () => ipcRenderer.invoke(CHANNELS.historyGet),

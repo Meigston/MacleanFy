@@ -1,4 +1,4 @@
-import { Gauge, Info, PackageX, Sparkles, Wrench, type LucideIcon } from 'lucide-react';
+import { Gauge, HeartHandshake, Info, PackageX, Sparkles, Wrench, type LucideIcon } from 'lucide-react';
 import { useT } from '../i18n';
 import { GROUPS } from '../lib/catalog';
 import { useStore, type Route } from '../state/store';
@@ -50,6 +50,7 @@ export function Sidebar() {
         </div>
       ))}
       <span className="sidebar__spacer" />
+      {item({ route: 'support', icon: HeartHandshake, label: tr.t('nav.support') })}
       {item({ route: 'about', icon: Info, label: tr.t('nav.about') })}
     </nav>
   );

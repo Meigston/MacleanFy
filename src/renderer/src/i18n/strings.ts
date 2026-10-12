@@ -9,6 +9,7 @@ export const pt = {
   'nav.smart': 'Limpeza inteligente',
   'nav.uninstaller': 'Desinstalador',
   'nav.maintenance': 'Manutenção',
+  'nav.support': 'Apoiar',
   'nav.about': 'Sobre e ajustes',
 
   'action.scan': 'Analisar agora',
@@ -106,6 +107,23 @@ export const pt = {
   'maintenance.cancelled': 'Cancelado',
   'maintenance.failed': 'Falhou: {error}',
 
+  'support.title': 'Apoie o MacleanFy',
+  'support.subtitle': 'O MacleanFy é gratuito e de código aberto. Se ele te ajudou, uma contribuição mantém o projeto andando.',
+  'support.pix.scope': 'Apenas Brasil',
+  'support.pix.alt': 'QR code do Pix',
+  'support.pix.recipient': 'para {name}',
+  'support.pix.text':
+    'Abra o app do seu banco, escolha pagar com Pix e aponte a câmera para o QR code. Se preferir, copie o código e use o Pix copia e cola.',
+  'support.pix.copy': 'Copiar código Pix',
+  'support.pix.copied': 'Código copiado',
+  'support.stripe.scope': 'Outros países',
+  'support.stripe.title': 'Cartão, pelo Stripe',
+  'support.stripe.text': 'Para quem está fora do Brasil. Você escolhe o valor e paga em dólar com cartão, Apple Pay ou Google Pay.',
+  'support.stripe.action': 'Contribuir pelo Stripe',
+  'support.sponsors.scope': 'Qualquer país',
+  'support.sponsors.text': 'Apoio único ou mensal, pela sua conta do GitHub.',
+  'support.sponsors.action': 'Abrir o GitHub Sponsors',
+
   'about.tagline': 'Limpeza do Mac com interface gráfica, de código aberto.',
   'about.version': 'Versão {version} · macOS {os}',
   'about.dev.title': 'Desenvolvedor',
@@ -144,6 +162,7 @@ export const en: Record<StringKey, string> = {
   'nav.smart': 'Smart clean',
   'nav.uninstaller': 'Uninstaller',
   'nav.maintenance': 'Maintenance',
+  'nav.support': 'Support',
   'nav.about': 'About & settings',
 
   'action.scan': 'Scan now',
@@ -240,6 +259,23 @@ export const en: Record<StringKey, string> = {
   'maintenance.ok': 'Done',
   'maintenance.cancelled': 'Cancelled',
   'maintenance.failed': 'Failed: {error}',
+
+  'support.title': 'Support MacleanFy',
+  'support.subtitle': 'MacleanFy is free and open source. If it helped you, a contribution keeps the project going.',
+  'support.pix.scope': 'Brazil only',
+  'support.pix.alt': 'Pix QR code',
+  'support.pix.recipient': 'to {name}',
+  'support.pix.text':
+    'Open your bank app, choose to pay with Pix and point the camera at the QR code. Or copy the code and paste it under Pix copia e cola.',
+  'support.pix.copy': 'Copy Pix code',
+  'support.pix.copied': 'Code copied',
+  'support.stripe.scope': 'Other countries',
+  'support.stripe.title': 'Card, through Stripe',
+  'support.stripe.text': 'For anyone outside Brazil. You choose the amount and pay in US dollars by card, Apple Pay or Google Pay.',
+  'support.stripe.action': 'Contribute through Stripe',
+  'support.sponsors.scope': 'Any country',
+  'support.sponsors.text': 'One-time or monthly support, through your GitHub account.',
+  'support.sponsors.action': 'Open GitHub Sponsors',
 
   'about.tagline': 'An open source Mac cleaner with a graphical interface.',
   'about.version': 'Version {version} · macOS {os}',

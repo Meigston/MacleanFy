@@ -5,6 +5,7 @@ import { About } from './pages/About';
 import { Cleaner } from './pages/Cleaner';
 import { Maintenance } from './pages/Maintenance';
 import { Overview } from './pages/Overview';
+import { Support } from './pages/Support';
 import { Uninstaller } from './pages/Uninstaller';
 import { useStore, type Route } from './state/store';
 
@@ -18,6 +19,8 @@ function Page({ route }: { route: Route }) {
       return <Uninstaller />;
     case 'maintenance':
       return <Maintenance />;
+    case 'support':
+      return <Support />;
     case 'about':
       return <About />;
     default:

@@ -57,7 +57,7 @@ MACLEANFY_CAPTURE=tela.png MACLEANFY_ROUTE=smart pnpm exec electron .
 ```
 
 `MACLEANFY_ROUTE` escolhe a tela (`overview`, `smart`, `system`, `development`, `storage`,
-`browsers`, `large`, `uninstaller`, `maintenance`, `about`) e `MACLEANFY_CAPTURE_SCRIPT`
+`browsers`, `large`, `uninstaller`, `maintenance`, `support`, `about`) e `MACLEANFY_CAPTURE_SCRIPT`
 roda um trecho de JavaScript na página antes da foto.
 
 ## Commits

@@ -28,6 +28,7 @@
     "test": "vitest run",
     "icon": "electron scripts/make-icon.cjs",
     "dmg:background": "electron scripts/make-dmg-background.cjs",
+    "pix:qr": "node scripts/make-pix-qr.cjs",
     "dist": "electron-vite build && electron-builder --mac"
   },
   "devDependencies": {
@@ -43,6 +44,7 @@
     "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "lucide-react": "^1.55.0",
+    "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "typescript": "^5.9.3",

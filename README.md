@@ -151,6 +151,31 @@ e para daltonismo.
 Problemas, ideias de categoria e pull requests são bem-vindos. Veja
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Apoie o projeto
+
+O MacleanFy é gratuito e de código aberto. Se ele te ajudou, uma contribuição mantém o projeto
+andando. No app, as mesmas opções ficam na tela **Apoiar**.
+
+### 🇧🇷 Pix — apenas Brasil
+
+<img src="assets/support/pix-qr.svg" width="220" alt="QR code do Pix">
+
+**R$ 10,00** para Meigston da Silva Ramos. Abra o app do seu banco, escolha pagar com Pix e
+aponte a câmera para o QR code, ou use o Pix copia e cola:
+
+```
+00020126580014BR.GOV.BCB.PIX01363da966f1-bd8d-488e-89a9-faadb0e5b63a520400005303986540510.005802BR5923Meigston da Silva Ramos6009SAO PAULO62140510wgZQvZ2KYU6304BF83
+```
+
+### 🌎 Stripe — outros países
+
+**[Contribuir pelo Stripe](https://donate.stripe.com/cNidR81zYdGPfZngEVgUM00)**: você escolhe o valor e paga em dólar com cartão,
+Apple Pay ou Google Pay.
+
+### GitHub Sponsors — qualquer país
+
+**[Apoiar pelo GitHub Sponsors](https://github.com/sponsors/Meigston)**: apoio único ou mensal, pela sua conta do GitHub.
+
 ## Licença
 
 [MIT](LICENSE). Partes do código vêm do mac-cleaner-cli, também sob MIT — veja

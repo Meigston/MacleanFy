@@ -23,6 +23,7 @@ export const CHANNELS = {
   openFullDiskAccess: 'shell:full-disk-access',
   openExternal: 'shell:open-external',
   reveal: 'shell:reveal',
+  copyPixCode: 'support:copy-pix',
 } as const;
 
 export interface ItemDTO {
@@ -149,6 +150,8 @@ export interface MacleanFyApi {
     openFullDiskAccessSettings(): Promise<void>;
     openExternal(url: string): Promise<void>;
     reveal(path: string): Promise<void>;
+    /** Copia o código Pix do projeto para a área de transferência. */
+    copyPixCode(): Promise<void>;
   };
   history: {
     get(): Promise<History>;
