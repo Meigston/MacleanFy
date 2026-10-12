@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy, QrCode } from 'lucide-react';
-import pixQrUrl from '../../../../assets/support/pix-qr.svg';
-import { SUPPORT, readPix } from '../../../shared/support';
+import { Check, Copy, CreditCard, ExternalLink, Globe, QrCode } from 'lucide-react';
+import fixedQrUrl from '../../../../assets/support/pix-qr-fixed.svg';
+import openQrUrl from '../../../../assets/support/pix-qr-open.svg';
+import { PIX_OPTIONS, SUPPORT, readPix, type PixOption } from '../../../shared/support';
 import { Button } from '../components/ui';
 import { useT } from '../i18n';
 
-const pix = readPix(SUPPORT.pix.payload);
+const QR_URLS: Record<PixOption, string> = { fixed: fixedQrUrl, open: openQrUrl };
 
 export function Support() {
   const { t, locale } = useT();
+  const [option, setOption] = useState<PixOption>('fixed');
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -17,8 +19,16 @@ export function Support() {
     return () => clearTimeout(timer);
   }, [copied]);
 
+  const pix = readPix(SUPPORT.pix[option]);
+  const money = (amount: number) => new Intl.NumberFormat(locale, { style: 'currency', currency: 'BRL' }).format(amount);
+  const label = (amount: number | null | undefined, open: string) => (amount == null ? open : money(amount));
+
+  const choose = (next: PixOption) => {
+    setOption(next);
+    setCopied(false);
+  };
   const copy = async () => {
-    await window.macleanfy.system.copyPixCode();
+    await window.macleanfy.system.copyPixCode(option);
     setCopied(true);
   };
 
@@ -39,17 +49,28 @@ export function Support() {
               {t('support.pix.scope')}
             </span>
             <div className="support__pix-body">
-              <img className="support__qr" src={pixQrUrl} alt={t('support.pix.alt')} draggable={false} />
+              <img className="support__qr" src={QR_URLS[option]} alt={t('support.pix.alt')} draggable={false} />
               <div className="support__pix-text">
                 <h2 className="task__title support__heading">
                   <QrCode size={17} />
                   Pix
                 </h2>
-                <p className="support__amount">
-                  {pix.amount === null
-                    ? t('support.pix.open')
-                    : new Intl.NumberFormat(locale, { style: 'currency', currency: 'BRL' }).format(pix.amount)}
-                </p>
+                <div className="segmented" role="radiogroup" aria-label={t('support.pix.amount')}>
+                  {PIX_OPTIONS.map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="radio"
+                      aria-checked={option === id}
+                      className={`segmented__option${option === id ? ' segmented__option--on' : ''}`}
+                      data-pix={id}
+                      onClick={() => choose(id)}
+                    >
+                      {label(readPix(SUPPORT.pix[id])?.amount, t('support.pix.other'))}
+                    </button>
+                  ))}
+                </div>
+                <p className="support__amount">{label(pix.amount, t('support.pix.open'))}</p>
                 <p className="task__meta">{t('support.pix.recipient', { name: pix.recipient })}</p>
                 <p className="task__text">{t('support.pix.text')}</p>
                 <div className="task__footer">
@@ -61,6 +82,27 @@ export function Support() {
             </div>
           </article>
         )}
+
+        <article className="card task">
+          <span className="support__scope">
+            <Globe size={13} />
+            {t('support.stripe.scope')}
+          </span>
+          <h2 className="task__title support__heading">
+            <CreditCard size={17} />
+            {t('support.stripe.title')}
+          </h2>
+          <p className="task__text">{t('support.stripe.text')}</p>
+          <div className="task__footer">
+            <Button
+              variant="primary"
+              icon={<ExternalLink size={15} />}
+              onClick={() => void window.macleanfy.system.openExternal(SUPPORT.stripe)}
+            >
+              {t('support.stripe.action')}
+            </Button>
+          </div>
+        </article>
       </div>
     </section>
   );

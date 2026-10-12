@@ -11,7 +11,7 @@ import {
   type MaintenanceTask,
   type UninstallResultDTO,
 } from '../shared/api';
-import { SUPPORT } from '../shared/support';
+import { SUPPORT, isPixOption } from '../shared/support';
 import { Engine } from './engine';
 import { HistoryStore } from './history';
 import { getSystemInfo, runMaintenance } from './system';
@@ -21,8 +21,8 @@ const FULL_DISK_ACCESS_URL = 'x-apple.systempreferences:com.apple.preference.sec
 /** O ícone aparece a 38px; o dobro cobre telas Retina. */
 const APP_ICON_SIZE = { width: 76, height: 76 };
 
-/** Só o que o próprio app aponta: o repositório, o projeto de origem e o perfil de quem o desenvolve. */
-const EXTERNAL_ALLOWLIST = ['https://github.com/', 'https://www.linkedin.com/in/meigston/'];
+/** Só o que o próprio app aponta: o repositório, o projeto de origem, o perfil de quem o desenvolve e a doação. */
+const EXTERNAL_ALLOWLIST = ['https://github.com/', 'https://www.linkedin.com/in/meigston/', SUPPORT.stripe];
 
 function isCategoryId(value: unknown): value is CategoryId {
   return typeof value === 'string' && value in CATEGORIES;
@@ -149,8 +149,10 @@ export function registerIpc(): void {
     if (typeof url === 'string' && isAllowedExternal(url)) await shell.openExternal(url);
   });
 
-  // A interface não manda texto para a área de transferência: só pede o código que o app conhece.
-  handle(CHANNELS.copyPixCode, () => clipboard.writeText(SUPPORT.pix.payload));
+  // A interface não manda texto para a área de transferência: só diz qual dos códigos do app quer.
+  handle(CHANNELS.copyPixCode, (_sender, option: unknown) => {
+    if (isPixOption(option)) clipboard.writeText(SUPPORT.pix[option]);
+  });
 
   handle(CHANNELS.reveal, (_sender, path: unknown) => {
     if (typeof path !== 'string') return;

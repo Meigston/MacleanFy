@@ -1,10 +1,19 @@
 import data from './support.json';
 
 /**
- * Como apoiar o projeto. O código Pix fica em support.json, que o script do QR code
- * também lê: depois de trocá-lo, rode `pnpm pix:qr`.
+ * Como apoiar o projeto. Os códigos Pix e o link de doação ficam em support.json, que o
+ * script dos QR codes também lê: depois de trocar um código, rode `pnpm pix:qr`.
  */
 export const SUPPORT = data;
+
+/** Os dois códigos Pix: um com valor de referência, outro em que quem paga escolhe. */
+export type PixOption = keyof typeof data.pix;
+
+export const PIX_OPTIONS = Object.keys(data.pix) as PixOption[];
+
+export function isPixOption(value: unknown): value is PixOption {
+  return typeof value === 'string' && (PIX_OPTIONS as string[]).includes(value);
+}
 
 export interface PixInfo {
   /** null quando o código deixa quem paga escolher o valor. */

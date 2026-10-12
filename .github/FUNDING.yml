@@ -1,3 +1,4 @@
-# O botão "Sponsor" do repositório leva à seção do README com o Pix (apenas Brasil).
+# Opções do botão "Sponsor" do repositório. O Pix (apenas Brasil) fica no README.
 custom:
+  - https://donate.stripe.com/cNidR81zYdGPfZngEVgUM00
   - https://github.com/Meigston/MacleanFy#apoie-o-projeto

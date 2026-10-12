@@ -1013,12 +1013,13 @@
  * ------------------------------------------------------------------------- */
 
 .support {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
 }
 
 .support__pix {
-  flex: 1;
-  max-width: 760px;
   gap: 18px;
 }
 

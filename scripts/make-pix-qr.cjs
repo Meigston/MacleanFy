@@ -1,16 +1,21 @@
 /*
- * Gera o QR code do Pix a partir do código "copia e cola" em src/shared/support.json.
+ * Gera os QR codes do Pix a partir dos códigos "copia e cola" em src/shared/support.json.
  *
  *   pnpm pix:qr
  *
- * Salva assets/support/pix-qr.svg, que o app e o README mostram. Um teste confere que o
- * arquivo corresponde ao código; rode de novo sempre que o código mudar.
+ * Salva assets/support/pix-qr-<opção>.svg, que o app e o README mostram. Um teste confere
+ * que cada arquivo corresponde ao seu código; rode de novo sempre que um código mudar.
  */
 const QRCode = require('qrcode');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const file = path.join(__dirname, '..', 'assets', 'support', 'pix-qr.svg');
+const dir = path.join(__dirname, '..', 'assets', 'support');
+
+/** Onde fica a imagem de cada opção ("fixed", "open"). */
+function qrFile(option) {
+  return path.join(dir, `pix-qr-${option}.svg`);
+}
 
 /** Preto sobre branco, com a margem de quatro módulos que os leitores pedem. */
 function renderPixQr(payload) {
@@ -19,11 +24,13 @@ function renderPixQr(payload) {
 
 if (require.main === module) {
   const { pix } = require('../src/shared/support.json');
-  renderPixQr(pix.payload).then((svg) => {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, svg);
-    console.log('assets/support/pix-qr.svg gerado');
-  });
+  fs.mkdirSync(dir, { recursive: true });
+  Promise.all(
+    Object.entries(pix).map(async ([option, payload]) => {
+      fs.writeFileSync(qrFile(option), await renderPixQr(payload));
+      console.log(`assets/support/pix-qr-${option}.svg gerado`);
+    })
+  );
 }
 
-module.exports = { renderPixQr, file };
+module.exports = { renderPixQr, qrFile };

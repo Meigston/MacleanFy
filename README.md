@@ -154,18 +154,33 @@ Problemas, ideias de categoria e pull requests são bem-vindos. Veja
 ## Apoie o projeto
 
 O MacleanFy é gratuito e de código aberto. Se ele te ajudou, uma contribuição mantém o projeto
-andando. No app, a mesma opção fica na tela **Apoiar**.
+andando. No app, as mesmas opções ficam na tela **Apoiar**.
 
 ### 🇧🇷 Pix — apenas Brasil
 
-<img src="assets/support/pix-qr.svg" width="220" alt="QR code do Pix">
+Para Meigston da Silva Ramos. Abra o app do seu banco, escolha pagar com Pix e aponte a câmera
+para um dos QR codes, ou use o Pix copia e cola.
 
-Para Meigston da Silva Ramos, no valor que você escolher. Abra o app do seu banco, escolha
-pagar com Pix e aponte a câmera para o QR code, ou use o Pix copia e cola:
+| R$ 10,00 | Outro valor |
+| :---: | :---: |
+| <img src="assets/support/pix-qr-fixed.svg" width="200" alt="QR code do Pix de R$ 10,00"> | <img src="assets/support/pix-qr-open.svg" width="200" alt="QR code do Pix de valor livre"> |
+
+Pix copia e cola de R$ 10,00:
+
+```
+00020126580014BR.GOV.BCB.PIX01363da966f1-bd8d-488e-89a9-faadb0e5b63a520400005303986540510.005802BR5923Meigston da Silva Ramos6009SAO PAULO62140510wgZQvZ2KYU6304BF83
+```
+
+Pix copia e cola de outro valor, que você escolhe no app do banco:
 
 ```
 00020126580014BR.GOV.BCB.PIX01363da966f1-bd8d-488e-89a9-faadb0e5b63a5204000053039865802BR5923Meigston da Silva Ramos6009SAO PAULO62070503***63042E26
 ```
+
+### 🌎 Stripe — outros países
+
+**[Contribuir pelo Stripe](https://donate.stripe.com/cNidR81zYdGPfZngEVgUM00)**: você escolhe o valor e paga em dólar com cartão,
+Apple Pay ou Google Pay.
 
 ## Licença
 

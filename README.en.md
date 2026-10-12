@@ -128,14 +128,29 @@ The interface ships in Portuguese (Brazil) and English, following the system lan
 ## Support the project
 
 MacleanFy is free and open source. If it helped you, a contribution keeps the project going.
-In the app, the same option is on the **Support** screen.
+In the app, the same options are on the **Support** screen.
+
+### 🌎 Stripe — outside Brazil
+
+**[Contribute through Stripe](https://donate.stripe.com/cNidR81zYdGPfZngEVgUM00)**: you choose the amount and pay in US dollars by card,
+Apple Pay or Google Pay.
 
 ### 🇧🇷 Pix — Brazil only
 
-<img src="assets/support/pix-qr.svg" width="220" alt="Pix QR code">
+To Meigston da Silva Ramos. Open your bank app, choose to pay with Pix and point the camera at
+one of the QR codes, or paste a code under *Pix copia e cola*.
 
-To Meigston da Silva Ramos, for any amount you choose. Open your bank app, choose to pay with
-Pix and point the camera at the QR code, or paste this code under *Pix copia e cola*:
+| R$ 10.00 | Another amount |
+| :---: | :---: |
+| <img src="assets/support/pix-qr-fixed.svg" width="200" alt="Pix QR code for R$ 10.00"> | <img src="assets/support/pix-qr-open.svg" width="200" alt="Pix QR code for any amount"> |
+
+Pix code for R$ 10.00:
+
+```
+00020126580014BR.GOV.BCB.PIX01363da966f1-bd8d-488e-89a9-faadb0e5b63a520400005303986540510.005802BR5923Meigston da Silva Ramos6009SAO PAULO62140510wgZQvZ2KYU6304BF83
+```
+
+Pix code for another amount, which you choose in your bank app:
 
 ```
 00020126580014BR.GOV.BCB.PIX01363da966f1-bd8d-488e-89a9-faadb0e5b63a5204000053039865802BR5923Meigston da Silva Ramos6009SAO PAULO62070503***63042E26

@@ -1,4 +1,5 @@
 import type { CategoryId } from '../core/types';
+import type { PixOption } from './support';
 
 /**
  * Contrato entre o processo principal e a interface.
@@ -78,10 +79,10 @@ export interface CleanProgress {
   total: number;
   /** Categoria em andamento; ausente no aviso final. */
   categoryId?: CategoryId;
-}
   /** Bytes já apagados e o total escolhido: é por eles que a barra anda. */
   doneBytes: number;
   totalBytes: number;
+}
 
 export interface SystemInfo {
   appVersion: string;
@@ -153,8 +154,8 @@ export interface MacleanFyApi {
     openFullDiskAccessSettings(): Promise<void>;
     openExternal(url: string): Promise<void>;
     reveal(path: string): Promise<void>;
-    /** Copia o código Pix do projeto para a área de transferência. */
-    copyPixCode(): Promise<void>;
+    /** Copia um dos códigos Pix do projeto para a área de transferência. */
+    copyPixCode(option: PixOption): Promise<void>;
   };
   history: {
     get(): Promise<History>;
