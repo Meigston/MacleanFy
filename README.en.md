@@ -4,7 +4,7 @@
 
 <p align="center">
   An open source Mac cleaner with a graphical interface.<br>
-  <a href="README.md">Português</a>
+  <a href="https://macleanfy.com/en">macleanfy.com</a> · <a href="README.md">Português</a>
 </p>
 
 ![MacleanFy overview](docs/screenshots/visao-geral.png)

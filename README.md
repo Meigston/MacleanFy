@@ -4,7 +4,7 @@
 
 <p align="center">
   Limpeza do Mac com interface gráfica, de código aberto.<br>
-  <a href="README.en.md">English</a>
+  <a href="https://macleanfy.com">macleanfy.com</a> · <a href="README.en.md">English</a>
 </p>
 
 ![Visão geral do MacleanFy](docs/screenshots/visao-geral.png)
