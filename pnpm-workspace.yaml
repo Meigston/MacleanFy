@@ -1,0 +1,6 @@
+# Scripts de build de dependências explicitamente autorizados.
+# Tudo que não estiver aqui não executa código na instalação.
+allowBuilds:
+  electron: set this to true or false
+  electron-winstaller: false
+  esbuild: true

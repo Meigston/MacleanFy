@@ -1,0 +1,38 @@
+appId: dev.macleanfy.app
+productName: MacleanFy
+copyright: Copyright © 2026 MacleanFy contributors
+
+directories:
+  output: dist
+  buildResources: build
+
+# O app inteiro já está empacotado em out/ pelo electron-vite; nada vem de node_modules.
+files:
+  - out/**
+  - package.json
+  - LICENSE
+  - NOTICE.md
+  - licenses/**
+
+# Só os idiomas que a interface tem; o Electron traz dezenas.
+electronLanguages:
+  - en
+  - pt_BR
+
+mac:
+  category: public.app-category.utilities
+  icon: build/icon.icns
+  target:
+    - dmg
+    - zip
+  # Sem certificado da Apple por padrão: assinatura ad-hoc, suficiente para rodar
+  # o que você mesmo compilou. Para distribuir, configure Developer ID e notarização.
+  identity: "-"
+  # O hardened runtime só faz sentido com Developer ID; com assinatura ad-hoc ele impede o app de abrir.
+  hardenedRuntime: false
+  extendInfo:
+    LSMinimumSystemVersion: "12.0"
+    NSHumanReadableCopyright: Copyright © 2026 MacleanFy contributors. Baseado no mac-cleaner-cli (MIT).
+
+dmg:
+  title: MacleanFy ${version}

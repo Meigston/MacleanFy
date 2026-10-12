@@ -1,0 +1,173 @@
+import type { CategoryId } from '../core/types';
+
+/**
+ * Contrato entre o processo principal e a interface.
+ *
+ * O renderer roda isolado e sem Node; tudo o que toca o disco passa por aqui.
+ * Uma regra atravessa as chamadas destrutivas: a interface só devolve
+ * identificadores (categoria + caminho) de coisas que o processo principal
+ * acabou de listar. Caminho que não veio da última análise é ignorado.
+ */
+
+export const CHANNELS = {
+  systemInfo: 'system:info',
+  historyGet: 'history:get',
+  scanRun: 'scan:run',
+  scanProgress: 'scan:progress',
+  cleanRun: 'clean:run',
+  cleanProgress: 'clean:progress',
+  appsList: 'apps:list',
+  appsProgress: 'apps:progress',
+  appsUninstall: 'apps:uninstall',
+  maintenanceRun: 'maintenance:run',
+  openFullDiskAccess: 'shell:full-disk-access',
+  openExternal: 'shell:open-external',
+  reveal: 'shell:reveal',
+} as const;
+
+export interface ItemDTO {
+  path: string;
+  name: string;
+  size: number;
+  isDirectory: boolean;
+  /** Milissegundos desde a época. */
+  modifiedAt?: number;
+}
+
+export interface ScanResultDTO {
+  categoryId: CategoryId;
+  items: ItemDTO[];
+  totalSize: number;
+  error?: string;
+}
+
+export interface ScanProgress {
+  completed: number;
+  total: number;
+  result: ScanResultDTO;
+}
+
+export interface CleanSelection {
+  categoryId: CategoryId;
+  paths: string[];
+}
+
+export interface CleanOptions {
+  /** Percorre tudo sem apagar nada. */
+  dryRun?: boolean;
+}
+
+export interface CleanResultDTO {
+  categoryId: CategoryId;
+  cleanedItems: number;
+  freedSpace: number;
+  errors: string[];
+}
+
+export interface CleanSummaryDTO {
+  results: CleanResultDTO[];
+  totalFreedSpace: number;
+  totalCleanedItems: number;
+  totalErrors: number;
+  dryRun: boolean;
+}
+
+export interface CleanProgress {
+  completed: number;
+  total: number;
+  /** Categoria em andamento; ausente no aviso final. */
+  categoryId?: CategoryId;
+}
+
+export interface SystemInfo {
+  appVersion: string;
+  osVersion: string;
+  locale: string;
+  modelName: string;
+  chip: string;
+  memory: string;
+  disk: {
+    volumeName: string;
+    total: number;
+    free: number;
+  };
+  fullDiskAccess: boolean;
+}
+
+export interface HistoryEntry {
+  at: number;
+  kind: 'clean' | 'uninstall';
+  freedSpace: number;
+  items: number;
+  /** Categorias limpas, ou nomes dos apps removidos. */
+  labels: string[];
+}
+
+export interface History {
+  /** Primeiro uso registrado; base do "desde ...". */
+  since: number;
+  totalFreedSpace: number;
+  totalItems: number;
+  entries: HistoryEntry[];
+}
+
+export interface InstalledAppDTO {
+  name: string;
+  path: string;
+  size: number;
+  related: Array<{ path: string; size: number }>;
+  totalSize: number;
+  /** Ícone do app como data URL. */
+  icon?: string;
+}
+
+export interface AppsProgress {
+  completed: number;
+  total: number;
+}
+
+export interface UninstallResultDTO {
+  uninstalled: number;
+  freedSpace: number;
+  /** Nomes dos apps que não puderam ser removidos. */
+  errors: string[];
+}
+
+export type MaintenanceTask = 'dns' | 'purgeable';
+
+export interface MaintenanceResultDTO {
+  success: boolean;
+  cancelled?: boolean;
+  error?: string;
+}
+
+export type Unsubscribe = () => void;
+
+export interface MacleanFyApi {
+  system: {
+    info(): Promise<SystemInfo>;
+    openFullDiskAccessSettings(): Promise<void>;
+    openExternal(url: string): Promise<void>;
+    reveal(path: string): Promise<void>;
+  };
+  history: {
+    get(): Promise<History>;
+  };
+  scan: {
+    /** Sem lista, analisa todas as categorias. */
+    run(categoryIds?: CategoryId[]): Promise<ScanResultDTO[]>;
+    onProgress(listener: (progress: ScanProgress) => void): Unsubscribe;
+  };
+  clean: {
+    run(selection: CleanSelection[], options?: CleanOptions): Promise<CleanSummaryDTO>;
+    onProgress(listener: (progress: CleanProgress) => void): Unsubscribe;
+  };
+  apps: {
+    list(): Promise<InstalledAppDTO[]>;
+    onProgress(listener: (progress: AppsProgress) => void): Unsubscribe;
+    uninstall(appPaths: string[]): Promise<UninstallResultDTO>;
+  };
+  maintenance: {
+    run(task: MaintenanceTask): Promise<MaintenanceResultDTO>;
+  };
+}

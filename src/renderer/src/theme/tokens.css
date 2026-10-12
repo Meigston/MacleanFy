@@ -1,0 +1,113 @@
+/*
+ * Tokens do MacleanFy.
+ *
+ * A estrutura é a do Nocturne, o design system do Airdroidfy: superfícies
+ * escuras, elevação feita de borda de 1px e escuridão ambiente, e a regra que
+ * atravessa tudo — o acento é linha e brilho, nunca preenchimento grande.
+ * A rampa neutra, as cores de estado, os raios e a tipografia são os mesmos.
+ *
+ * O que muda é o acento: sai o lilás e entra o azul → ciano da logo do
+ * MacleanFy, o mesmo neon do ícone do Airdroidfy. O lilás original fica como
+ * cor de apoio.
+ */
+:root {
+  /* neutros (Nocturne) */
+  --neutral-100: #f3f5fe;
+  --neutral-200: #e4e7f5;
+  --neutral-300: #cfd3e5;
+  --neutral-400: #b2b6ca;
+  --neutral-500: #9397ab;
+  --neutral-600: #75798c;
+  --neutral-700: #595d6c;
+  --neutral-800: #3f424d;
+  --neutral-900: #292b31;
+
+  /* acento — azul da logo */
+  --accent-100: #eaf7ff;
+  --accent-200: #c9ecff;
+  --accent-300: #93dcff;
+  --accent-400: #4fc6ff;
+  --accent-500: #1f9dff;
+  --accent-600: #0b6dff;
+  --accent-700: #0a4fc9;
+  --accent-800: #0b3690;
+  --accent-900: #0c2259;
+
+  /* ciano do brilho e da estrela */
+  --glow: #13fafe;
+  --glow-soft: #7df6ff;
+  --glow-rgb: 19, 250, 254;
+  --accent-rgb: 31, 157, 255;
+
+  /* lilás do Airdroidfy, como apoio */
+  --violet-400: #b5abfc;
+  --violet-500: #968ae0;
+
+  /* superfícies — o azul-marinho profundo do fundo da logo */
+  --surface-deep: #05001d;
+  --surface-background: #090642;
+  --surface-scrim: rgba(3, 0, 22, 0.66);
+  --surface-card: rgba(126, 146, 255, 0.075);
+  --surface-card-strong: rgba(126, 146, 255, 0.12);
+  --surface-raised: rgba(255, 255, 255, 0.05);
+  --surface-solid: #14124a;
+  --line: rgba(164, 184, 255, 0.14);
+  --line-strong: rgba(164, 184, 255, 0.26);
+
+  /* estado (Nocturne) — sempre com ícone e rótulo, nunca só a cor */
+  --positive: #7ee0a8;
+  --negative: #e08a8a;
+  --warning: #f0b860;
+  --warning-surface: rgba(240, 184, 96, 0.1);
+  --negative-surface: rgba(224, 138, 138, 0.1);
+
+  /* texto */
+  --text-primary: #eef0ff;
+  --text-secondary: #b9bfde;
+  --text-tertiary: #8d93b8;
+  --text-faint: #6a7096;
+
+  /*
+   * Séries dos gráficos, uma por grupo de limpeza, em ordem fixa. Não são as
+   * cores da marca de propósito: foram validadas para o fundo escuro (faixa de
+   * luminosidade, contraste ≥ 3:1) e para daltonismo entre vizinhas.
+   */
+  --series-system: #3987e5;
+  --series-development: #d95926;
+  --series-storage: #199e70;
+  --series-browsers: #c98500;
+  --series-large: #d55181;
+
+  /* espaçamento */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* raios */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-card: 20px;
+  --radius-pill: 99px;
+
+  /* brilho — a presença forte do acento é sempre luz */
+  --glow-line: inset 0 0 0 1px rgba(79, 198, 255, 0.6);
+  --glow-sm: 0 0 18px rgba(var(--glow-rgb), 0.22);
+  --glow-md: 0 0 28px rgba(var(--glow-rgb), 0.3), 0 0 64px rgba(2, 96, 255, 0.28);
+  --shadow-card: inset 0 0 0 1px var(--line), 0 18px 44px rgba(3, 0, 31, 0.38);
+  --shadow-pop: inset 0 0 0 1px var(--line-strong), 0 30px 80px rgba(2, 0, 20, 0.7);
+
+  /* tipografia */
+  --font-body: 'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* movimento */
+  --motion-fast: 140ms;
+  --motion-navigation: 220ms;
+  --motion-pulse: 2000ms;
+  --motion-scan: 2400ms;
+}
