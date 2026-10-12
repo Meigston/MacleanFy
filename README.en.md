@@ -69,14 +69,41 @@ pnpm install
 pnpm dev
 ```
 
-To build the application:
+### Building the installer
 
 ```bash
-pnpm dist      # creates dist/MacleanFy-<version>.dmg
+pnpm dist
 ```
 
-The build is ad-hoc signed, which is enough to run what you compiled yourself. There is no
-signed and notarized installer to download yet.
+It creates two installers in `dist/`:
+
+| File | For |
+| --- | --- |
+| `MacleanFy-<version>-arm64.dmg` | Apple Silicon Macs (M1 or later) |
+| `MacleanFy-<version>-x64.dmg` | Intel Macs |
+
+Open the `.dmg` and drag MacleanFy to the Applications folder.
+
+Without a certificate the build is ad-hoc signed: it opens on the Mac that compiled it, but
+macOS blocks it on any other Mac it is copied or downloaded to. There is no signed and
+notarized installer to download yet.
+
+### Signing and notarizing
+
+To distribute it, the installer needs a *Developer ID Application* certificate and Apple
+notarization. With the certificate in your Keychain:
+
+```bash
+export CSC_NAME="Your Name (TEAMID)"
+export APPLE_API_KEY=/path/to/AuthKey_XXXXXXXXXX.p8
+export APPLE_API_KEY_ID=XXXXXXXXXX
+export APPLE_API_ISSUER=00000000-0000-0000-0000-000000000000
+pnpm dist
+```
+
+Instead of the API key you can use a `notarytool` profile (`APPLE_KEYCHAIN_PROFILE`) or
+`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`. None of these credentials
+belong in the repository.
 
 ### Full Disk Access
 
