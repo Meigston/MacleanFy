@@ -1138,12 +1138,35 @@
   font-weight: 500;
 }
 
-/* Com cinco cartões o último ocupa a linha inteira, em vez de sobrar sozinho numa coluna. */
+/* Cartão que ocupa a linha inteira, com o conteúdo correndo na horizontal. */
 .about__card--wide {
   grid-column: 1 / -1;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
+}
+
+.about__app-icon {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 13px;
+}
+
+.about__more {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  margin: 0 8px 0 6px;
+}
+
+.about__eyebrow {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .about__name {

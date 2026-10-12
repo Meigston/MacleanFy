@@ -21,8 +21,13 @@ const FULL_DISK_ACCESS_URL = 'x-apple.systempreferences:com.apple.preference.sec
 /** O ícone aparece a 38px; o dobro cobre telas Retina. */
 const APP_ICON_SIZE = { width: 76, height: 76 };
 
-/** Só o que o próprio app aponta: o repositório, o projeto de origem, o perfil de quem o desenvolve e a doação. */
-const EXTERNAL_ALLOWLIST = ['https://github.com/', 'https://www.linkedin.com/in/meigston/', SUPPORT.stripe];
+/** Só o que o próprio app aponta: o repositório, o projeto de origem, quem o desenvolve (perfil e outro app) e a doação. */
+const EXTERNAL_ALLOWLIST = [
+  'https://github.com/',
+  'https://www.linkedin.com/in/meigston/',
+  'https://airdroidfy.com/',
+  SUPPORT.stripe,
+];
 
 function isCategoryId(value: unknown): value is CategoryId {
   return typeof value === 'string' && value in CATEGORIES;

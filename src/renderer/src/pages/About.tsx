@@ -1,4 +1,5 @@
 import { CircleAlert, CircleCheck, CircleUserRound, ExternalLink, Heart, Languages, Lock, Scale } from 'lucide-react';
+import airdroidfyUrl from '../assets/airdroidfy.png';
 import logoUrl from '../assets/logo.webp';
 import { Button } from '../components/ui';
 import { LOCALES, useT } from '../i18n';
@@ -7,6 +8,7 @@ import { useStore } from '../state/store';
 const REPO_URL = 'https://github.com/Meigston/MacleanFy';
 const UPSTREAM_URL = 'https://github.com/guhcostan/mac-cleaner-cli';
 const DEVELOPER = { name: 'Meigston Ramos', linkedin: 'https://www.linkedin.com/in/meigston/' };
+const AIRDROIDFY_URL = 'https://airdroidfy.com/?ref=macleanfy';
 
 export function About() {
   const { t, locale } = useT();
@@ -103,6 +105,19 @@ export function About() {
                 </button>
               ))}
             </div>
+          </article>
+
+          <article className="card about__card about__card--wide">
+            <img className="about__app-icon" src={airdroidfyUrl} alt="" draggable={false} />
+            <div className="about__more">
+              <h2 className="about__eyebrow">{t('about.more.title')}</h2>
+              <p className="about__name">Airdroidfy</p>
+              <p className="about__text">{t('about.more.text')}</p>
+            </div>
+            <button type="button" className="link" onClick={() => open(AIRDROIDFY_URL)}>
+              airdroidfy.com
+              <ExternalLink size={13} />
+            </button>
           </article>
         </div>
       </div>

@@ -141,6 +141,9 @@ export const pt = {
   'about.fda.missing': 'Não concedido — o macOS esconde a Lixeira, o Mail e o Safari da análise.',
   'about.language': 'Idioma',
   'about.license': 'Licença MIT',
+  'about.more.title': 'Do mesmo desenvolvedor',
+  'about.more.text':
+    'Arquivos, tela e câmera entre o Android e o Mac, pela rede da sua casa e sem nuvem. App pago, com teste grátis.',
 
   'safety.safe': 'Seguro',
   'safety.moderate': 'Moderado',
@@ -295,6 +298,9 @@ export const en: Record<StringKey, string> = {
   'about.fda.missing': 'Not granted — macOS hides the Trash, Mail and Safari from the scan.',
   'about.language': 'Language',
   'about.license': 'MIT License',
+  'about.more.title': 'From the same developer',
+  'about.more.text':
+    'Files, screen and camera between Android and your Mac, over your home network, with no cloud. Paid app, with a free trial.',
 
   'safety.safe': 'Safe',
   'safety.moderate': 'Moderate',
