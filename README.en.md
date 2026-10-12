@@ -31,12 +31,8 @@ Not sure? Open the Apple menu → **About This Mac**: a "Chip" line means Apple 
 "Processor" line means Intel. Requires macOS 12 or later.
 
 1. Open the `.dmg` and drag MacleanFy to the Applications folder.
-2. Open MacleanFy. The first time, macOS blocks it, because the installer is not yet signed
-   and notarized by Apple. To allow it:
-   - **macOS 15 or later:** dismiss the warning, open **System Settings → Privacy &
-     Security**, scroll to the bottom and click **Open Anyway**.
-   - **macOS 12 to 14:** right-click the app, choose **Open** and confirm.
-   - Or run in Terminal: `xattr -dr com.apple.quarantine /Applications/MacleanFy.app`
+2. Open MacleanFy. The installer is signed and notarized by Apple: the first time, macOS
+   only asks you to confirm opening an app downloaded from the internet.
 3. For the scan to see the Trash, Mail and Safari, grant [Full Disk Access](#full-disk-access).
 
 The release page lists the SHA-256 of each installer. To check your download:
@@ -110,13 +106,16 @@ It creates two installers in `dist/`:
 | `MacleanFy-x64.dmg` | Intel Macs |
 
 Without a certificate the build is ad-hoc signed: it opens right away on the Mac that
-compiled it, and on any other Mac macOS asks for the step described under
-[Install](#install). The installers published today are of this kind.
+compiled it, and on any other Mac macOS blocks the first launch. To allow it, open **System
+Settings → Privacy & Security** and click **Open Anyway**, or run
+`xattr -dr com.apple.quarantine /Applications/MacleanFy.app`. The published installers are
+signed and notarized.
 
 ### Signing and notarizing
 
 To distribute it, the installer needs a *Developer ID Application* certificate and Apple
-notarization. With the certificate in your Keychain:
+notarization. With the certificate in your Keychain, `pnpm dist` signs and notarizes both
+the app and the `.dmg`:
 
 ```bash
 export CSC_NAME="Your Name (TEAMID)"

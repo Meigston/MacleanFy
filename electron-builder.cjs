@@ -6,10 +6,26 @@
  * Sem variáveis de ambiente o app sai com assinatura ad-hoc: qualquer pessoa compila e
  * roda o que compilou. O instalador que vai a público precisa de um certificado
  * "Developer ID Application" (CSC_NAME, ou CSC_LINK no CI) e de notarização — o
- * electron-builder notariza sozinho quando encontra as credenciais da Apple no
- * ambiente. O README traz as variáveis.
+ * electron-builder notariza o app sozinho quando encontra as credenciais da Apple no
+ * ambiente, e o gancho no fim deste arquivo faz o mesmo com o .dmg. O README traz as
+ * variáveis.
  */
+const { execFileSync } = require('node:child_process');
+
 const developerId = Boolean(process.env.CSC_NAME || process.env.CSC_LINK);
+
+/** Credenciais para o notarytool, lidas das mesmas variáveis que o electron-builder usa. */
+function notaryCredentials() {
+  const env = process.env;
+  if (env.APPLE_API_KEY && env.APPLE_API_KEY_ID && env.APPLE_API_ISSUER) {
+    return ['--key', env.APPLE_API_KEY, '--key-id', env.APPLE_API_KEY_ID, '--issuer', env.APPLE_API_ISSUER];
+  }
+  if (env.APPLE_KEYCHAIN_PROFILE) return ['--keychain-profile', env.APPLE_KEYCHAIN_PROFILE];
+  if (env.APPLE_ID && env.APPLE_APP_SPECIFIC_PASSWORD && env.APPLE_TEAM_ID) {
+    return ['--apple-id', env.APPLE_ID, '--password', env.APPLE_APP_SPECIFIC_PASSWORD, '--team-id', env.APPLE_TEAM_ID];
+  }
+  return null;
+}
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
@@ -59,5 +75,23 @@ module.exports = {
     ],
     // Sem atualização automática, o .blockmap não tem quem o leia.
     writeUpdateInfo: false,
+  },
+
+  // O electron-builder assina e notariza o app, mas o .dmg que o embrulha sai sem
+  // assinatura. É o .dmg que a pessoa baixa, então ele também é assinado, notarizado e
+  // recebe o tíquete grampeado, para o macOS conferir mesmo sem internet. Só com CSC_NAME,
+  // que é quem diz o nome do certificado a usar.
+  afterAllArtifactBuild: async ({ artifactPaths }) => {
+    const credentials = notaryCredentials();
+    if (!process.env.CSC_NAME || !credentials) return [];
+
+    const identity = `Developer ID Application: ${process.env.CSC_NAME.replace(/^Developer ID Application: /, '')}`;
+    for (const dmg of artifactPaths.filter((file) => file.endsWith('.dmg'))) {
+      execFileSync('codesign', ['--force', '--timestamp', '--sign', identity, dmg], { stdio: 'inherit' });
+      execFileSync('xcrun', ['notarytool', 'submit', dmg, ...credentials, '--wait'], { stdio: 'inherit' });
+      // Se a Apple recusar, é aqui que o build para: sem tíquete não há o que grampear.
+      execFileSync('xcrun', ['stapler', 'staple', dmg], { stdio: 'inherit' });
+    }
+    return [];
   },
 };

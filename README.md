@@ -31,12 +31,8 @@ Na dúvida, abra o menu Apple → **Sobre Este Mac**: se houver uma linha "Chip"
 Silicon; se houver "Processador", é Intel. Requer macOS 12 ou mais novo.
 
 1. Abra o `.dmg` e arraste o MacleanFy para a pasta Aplicativos.
-2. Abra o MacleanFy. Na primeira vez o macOS bloqueia, porque o instalador ainda não é
-   assinado nem notarizado pela Apple. Para liberar:
-   - **macOS 15 ou mais novo:** feche o aviso, abra **Ajustes do Sistema → Privacidade e
-     Segurança**, role até o fim e clique em **Abrir Mesmo Assim**.
-   - **macOS 12 a 14:** clique no app com o botão direito, escolha **Abrir** e confirme.
-   - Ou rode no Terminal: `xattr -dr com.apple.quarantine /Applications/MacleanFy.app`
+2. Abra o MacleanFy. O instalador é assinado e notarizado pela Apple: na primeira vez o
+   macOS só confirma se você quer abrir um app baixado da internet.
 3. Para a análise enxergar a Lixeira, o Mail e o Safari, conceda o
    [Acesso Total ao Disco](#acesso-total-ao-disco).
 
@@ -113,13 +109,16 @@ Saem dois instaladores em `dist/`:
 | `MacleanFy-x64.dmg` | Macs com Intel |
 
 Sem certificado o build sai com assinatura ad-hoc: abre direto no Mac em que foi compilado,
-e em qualquer outro o macOS pede a liberação descrita em [Instalar](#instalar). Os
-instaladores publicados hoje são desse tipo.
+e em qualquer outro o macOS bloqueia a primeira abertura. Para liberar, abra **Ajustes do
+Sistema → Privacidade e Segurança** e clique em **Abrir Mesmo Assim**, ou rode
+`xattr -dr com.apple.quarantine /Applications/MacleanFy.app`. Os instaladores publicados
+são assinados e notarizados.
 
 ### Assinar e notarizar
 
 Para distribuir, o instalador precisa de um certificado *Developer ID Application* e da
-notarização da Apple. Com o certificado no Keychain:
+notarização da Apple. Com o certificado no Keychain, o `pnpm dist` assina e notariza o app
+e o `.dmg`:
 
 ```bash
 export CSC_NAME="Seu Nome (TEAMID)"

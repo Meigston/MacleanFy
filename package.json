@@ -1,7 +1,7 @@
 {
   "name": "macleanfy",
   "productName": "MacleanFy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Limpeza do Mac com interface gráfica, de código aberto. Baseado no guhcostan/mac-cleaner-cli.",
   "main": "./out/main/index.js",
