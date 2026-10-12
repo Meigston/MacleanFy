@@ -18,6 +18,34 @@ mudou e do que é novo está em [NOTICE.md](NOTICE.md).
 
 Se você prefere o terminal, use o projeto original.
 
+## Instalar
+
+Baixe o instalador da [versão mais recente](https://github.com/Meigston/MacleanFy/releases/latest):
+
+| Seu Mac | Instalador |
+| --- | --- |
+| Apple Silicon (M1 ou mais novo) | **[MacleanFy-arm64.dmg](https://github.com/Meigston/MacleanFy/releases/latest/download/MacleanFy-arm64.dmg)** |
+| Intel | **[MacleanFy-x64.dmg](https://github.com/Meigston/MacleanFy/releases/latest/download/MacleanFy-x64.dmg)** |
+
+Na dúvida, abra o menu Apple → **Sobre Este Mac**: se houver uma linha "Chip", é Apple
+Silicon; se houver "Processador", é Intel. Requer macOS 12 ou mais novo.
+
+1. Abra o `.dmg` e arraste o MacleanFy para a pasta Aplicativos.
+2. Abra o MacleanFy. Na primeira vez o macOS bloqueia, porque o instalador ainda não é
+   assinado nem notarizado pela Apple. Para liberar:
+   - **macOS 15 ou mais novo:** feche o aviso, abra **Ajustes do Sistema → Privacidade e
+     Segurança**, role até o fim e clique em **Abrir Mesmo Assim**.
+   - **macOS 12 a 14:** clique no app com o botão direito, escolha **Abrir** e confirme.
+   - Ou rode no Terminal: `xattr -dr com.apple.quarantine /Applications/MacleanFy.app`
+3. Para a análise enxergar a Lixeira, o Mail e o Safari, conceda o
+   [Acesso Total ao Disco](#acesso-total-ao-disco).
+
+A página da versão traz o SHA-256 de cada instalador. Para conferir o que você baixou:
+
+```bash
+shasum -a 256 ~/Downloads/MacleanFy-arm64.dmg
+```
+
 ## O que ele faz
 
 **Visão geral.** Saúde do disco, espaço recuperável por grupo, o que já foi liberado e
@@ -60,7 +88,7 @@ Um limpador apaga arquivos. Estas são as travas:
 
 A limpeza das categorias **é permanente**: os arquivos não passam pela Lixeira.
 
-## Como rodar
+## Rodar a partir do código
 
 Requisitos: macOS 12 ou mais novo, Node 22 e [pnpm](https://pnpm.io).
 
@@ -81,14 +109,12 @@ Saem dois instaladores em `dist/`:
 
 | Arquivo | Para |
 | --- | --- |
-| `MacleanFy-<versão>-arm64.dmg` | Macs com Apple Silicon (M1 ou mais novo) |
-| `MacleanFy-<versão>-x64.dmg` | Macs com Intel |
+| `MacleanFy-arm64.dmg` | Macs com Apple Silicon (M1 ou mais novo) |
+| `MacleanFy-x64.dmg` | Macs com Intel |
 
-Abra o `.dmg` e arraste o MacleanFy para a pasta Aplicativos.
-
-Sem certificado o build sai com assinatura ad-hoc: abre no Mac em que foi compilado, mas o
-macOS o bloqueia em qualquer outro para onde for copiado ou baixado. Ainda não há um
-instalador assinado e notarizado para baixar.
+Sem certificado o build sai com assinatura ad-hoc: abre direto no Mac em que foi compilado,
+e em qualquer outro o macOS pede a liberação descrita em [Instalar](#instalar). Os
+instaladores publicados hoje são desse tipo.
 
 ### Assinar e notarizar
 

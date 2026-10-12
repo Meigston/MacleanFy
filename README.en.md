@@ -18,6 +18,33 @@ changed and what is new.
 
 If you prefer the terminal, use the original project.
 
+## Install
+
+Download the installer from the [latest release](https://github.com/Meigston/MacleanFy/releases/latest):
+
+| Your Mac | Installer |
+| --- | --- |
+| Apple Silicon (M1 or later) | **[MacleanFy-arm64.dmg](https://github.com/Meigston/MacleanFy/releases/latest/download/MacleanFy-arm64.dmg)** |
+| Intel | **[MacleanFy-x64.dmg](https://github.com/Meigston/MacleanFy/releases/latest/download/MacleanFy-x64.dmg)** |
+
+Not sure? Open the Apple menu → **About This Mac**: a "Chip" line means Apple Silicon, a
+"Processor" line means Intel. Requires macOS 12 or later.
+
+1. Open the `.dmg` and drag MacleanFy to the Applications folder.
+2. Open MacleanFy. The first time, macOS blocks it, because the installer is not yet signed
+   and notarized by Apple. To allow it:
+   - **macOS 15 or later:** dismiss the warning, open **System Settings → Privacy &
+     Security**, scroll to the bottom and click **Open Anyway**.
+   - **macOS 12 to 14:** right-click the app, choose **Open** and confirm.
+   - Or run in Terminal: `xattr -dr com.apple.quarantine /Applications/MacleanFy.app`
+3. For the scan to see the Trash, Mail and Safari, grant [Full Disk Access](#full-disk-access).
+
+The release page lists the SHA-256 of each installer. To check your download:
+
+```bash
+shasum -a 256 ~/Downloads/MacleanFy-arm64.dmg
+```
+
 ## What it does
 
 **Overview.** Disk health, reclaimable space by group, what you have freed so far and
@@ -58,7 +85,7 @@ A cleaner deletes files. These are the guards:
 
 Cleaning a category **is permanent**: files do not go through the Trash.
 
-## Running it
+## Running from source
 
 Requirements: macOS 12 or later, Node 22 and [pnpm](https://pnpm.io).
 
@@ -79,14 +106,12 @@ It creates two installers in `dist/`:
 
 | File | For |
 | --- | --- |
-| `MacleanFy-<version>-arm64.dmg` | Apple Silicon Macs (M1 or later) |
-| `MacleanFy-<version>-x64.dmg` | Intel Macs |
+| `MacleanFy-arm64.dmg` | Apple Silicon Macs (M1 or later) |
+| `MacleanFy-x64.dmg` | Intel Macs |
 
-Open the `.dmg` and drag MacleanFy to the Applications folder.
-
-Without a certificate the build is ad-hoc signed: it opens on the Mac that compiled it, but
-macOS blocks it on any other Mac it is copied or downloaded to. There is no signed and
-notarized installer to download yet.
+Without a certificate the build is ad-hoc signed: it opens right away on the Mac that
+compiled it, and on any other Mac macOS asks for the step described under
+[Install](#install). The installers published today are of this kind.
 
 ### Signing and notarizing
 

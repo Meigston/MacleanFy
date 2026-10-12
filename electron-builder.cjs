@@ -1,7 +1,7 @@
 /*
  * Empacotamento do MacleanFy.
  *
- *   pnpm dist      gera dist/MacleanFy-<versão>-arm64.dmg e -x64.dmg
+ *   pnpm dist      gera dist/MacleanFy-arm64.dmg e dist/MacleanFy-x64.dmg
  *
  * Sem variáveis de ambiente o app sai com assinatura ad-hoc: qualquer pessoa compila e
  * roda o que compilou. O instalador que vai a público precisa de um certificado
@@ -34,7 +34,8 @@ module.exports = {
     // Um instalador por arquitetura: o universal dobraria o tamanho de um app cuja
     // razão de existir é liberar espaço.
     target: [{ target: 'dmg', arch: ['arm64', 'x64'] }],
-    artifactName: '${productName}-${version}-${arch}.${ext}',
+    // Sem a versão no nome, o link "releases/latest/download/..." do README vale para sempre.
+    artifactName: '${productName}-${arch}.${ext}',
     // "-" é assinatura ad-hoc. Com Developer ID a chave fica de fora para o
     // electron-builder procurar o certificado no Keychain.
     ...(developerId ? {} : { identity: '-' }),
