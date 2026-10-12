@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="{{lang}}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{meta.title}}</title>
+    <meta name="description" content="{{meta.description}}">
+    <meta name="theme-color" content="#05001d">
+    <link rel="canonical" href="{{canonical}}">
+    <link rel="alternate" hreflang="pt-BR" href="{{alternate.pt}}">
+    <link rel="alternate" hreflang="en" href="{{alternate.en}}">
+    <link rel="alternate" hreflang="x-default" href="{{alternate.en}}">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{{meta.title}}">
+    <meta property="og:description" content="{{meta.description}}">
+    <meta property="og:url" content="{{canonical}}">
+    <meta property="og:image" content="{{origin}}/assets/og.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" type="image/png" href="/assets/favicon.png">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+    <link rel="preload" href="/assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/styles.css">
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap nav__row">
+        <a class="brand" href="{{home.path}}" aria-label="MacleanFy">
+          <img class="brand__symbol" src="/assets/symbol.png" alt="" width="40" height="40">
+          <span class="brand__name">Maclean<span>Fy</span></span>
+        </a>
+        <nav class="nav__links" aria-label="MacleanFy">
+          <a href="#recursos">{{nav.features}}</a>
+          <a href="#seguranca">{{nav.safety}}</a>
+          <a href="#instalar">{{nav.install}}</a>
+          <a href="#apoiar">{{nav.support}}</a>
+        </nav>
+        <div class="nav__side">
+          <a class="nav__lang" href="{{other.path}}">{{nav.language}}</a>
+          <a class="nav__github" href="{{repo}}">GitHub</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="wrap hero__inner">
+          <h1 class="hero__title">{{hero.title.1}} <span>{{hero.title.2}}</span></h1>
+          <p class="hero__text">{{hero.text}}</p>
+          <div class="hero__actions">
+            <a class="button button--primary" href="{{download.arm64}}">{{hero.arm64}}</a>
+            <a class="button" href="{{download.x64}}">{{hero.x64}}</a>
+          </div>
+          <p class="hero__note">{{hero.note}} {{version}}</p>
+          <p class="hero__which">{{hero.which}}</p>
+        </div>
+        <div class="wrap">
+          <figure class="shot shot--hero">
+            <img src="/assets/visao-geral.jpg" alt="{{hero.shot}}" width="2000" height="1288">
+          </figure>
+        </div>
+      </section>
+
+      <section class="section" id="recursos">
+        <div class="wrap">
+          <h2 class="section__title">{{features.title}}</h2>
+          <div class="grid grid--4">
+            <article class="card">
+              <h3>{{features.overview.title}}</h3>
+              <p>{{features.overview.text}}</p>
+            </article>
+            <article class="card">
+              <h3>{{features.clean.title}}</h3>
+              <p>{{features.clean.text}}</p>
+            </article>
+            <article class="card">
+              <h3>{{features.uninstall.title}}</h3>
+              <p>{{features.uninstall.text}}</p>
+            </article>
+            <article class="card">
+              <h3>{{features.maintenance.title}}</h3>
+              <p>{{features.maintenance.text}}</p>
+            </article>
+          </div>
+          <figure class="shot">
+            <img src="/assets/limpeza.jpg" alt="{{shots.clean}}" width="2000" height="1288" loading="lazy">
+            <figcaption>{{shots.clean.caption}}</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section" id="seguranca">
+        <div class="wrap">
+          <h2 class="section__title">{{safety.title}}</h2>
+          <p class="section__text">{{safety.text}}</p>
+          <div class="grid grid--3">
+            <article class="card">
+              <h3>{{safety.read.title}}</h3>
+              <p>{{safety.read.text}}</p>
+            </article>
+            <article class="card">
+              <h3>{{safety.preselect.title}}</h3>
+              <p>{{safety.preselect.text}}</p>
+            </article>
+            <article class="card">
+              <h3>{{safety.dry.title}}</h3>
+              <p>{{safety.dry.text}}</p>
+            </article>
+            <article class="card">
+              <h3>{{safety.system.title}}</h3>
+              <p>{{safety.system.text}}</p>
+            </article>
+            <article class="card">
+              <h3>{{safety.trash.title}}</h3>
+              <p>{{safety.trash.text}}</p>
+            </article>
+            <article class="card card--note">
+              <p>{{safety.note}}</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="instalar">
+        <div class="wrap install">
+          <div>
+            <h2 class="section__title">{{install.title}}</h2>
+            <ol class="steps">
+              <li>{{install.step1}}</li>
+              <li>{{install.step2}}</li>
+              <li>{{install.step3}}</li>
+            </ol>
+            <p class="install__older">{{install.older}}</p>
+            <pre class="code"><code>xattr -dr com.apple.quarantine /Applications/MacleanFy.app</code></pre>
+          </div>
+          <aside class="card install__download">
+            <a class="button button--primary" href="{{download.arm64}}">{{hero.arm64}}</a>
+            <a class="button" href="{{download.x64}}">{{hero.x64}}</a>
+            <p>{{hero.which}}</p>
+            <p>{{install.checksum}} <a href="{{repo}}/releases/latest">{{install.release}}</a></p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="wrap">
+          <article class="card card--credit">
+            <h2>{{based.title}}</h2>
+            <p>{{based.text}}</p>
+            <a href="https://github.com/guhcostan/mac-cleaner-cli">{{based.link}}</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="apoiar">
+        <div class="wrap">
+          <h2 class="section__title">{{support.title}}</h2>
+          <p class="section__text">{{support.text}}</p>
+          <div class="support">
+            <article class="card support__pix">
+              <span class="chip"><span aria-hidden="true">🇧🇷</span> {{support.pix.scope}}</span>
+              <p class="support__to">{{support.pix.to}} {{pix.recipient}}</p>
+              <div class="support__codes">
+                <div class="pix">
+                  <img src="/assets/pix-qr-fixed.svg" alt="{{support.pix.fixed.alt}}" width="200" height="200" loading="lazy">
+                  <strong>{{pix.fixed.amount}}</strong>
+                  <button class="button" type="button" data-copy="{{pix.fixed.code}}" data-copied="{{support.pix.copied}}">{{support.pix.copy}}</button>
+                </div>
+                <div class="pix">
+                  <img src="/assets/pix-qr-open.svg" alt="{{support.pix.open.alt}}" width="200" height="200" loading="lazy">
+                  <strong>{{support.pix.open}}</strong>
+                  <button class="button" type="button" data-copy="{{pix.open.code}}" data-copied="{{support.pix.copied}}">{{support.pix.copy}}</button>
+                </div>
+              </div>
+              <p class="support__hint">{{support.pix.hint}}</p>
+            </article>
+            <article class="card support__stripe">
+              <span class="chip">{{support.stripe.scope}}</span>
+              <h3>{{support.stripe.title}}</h3>
+              <p>{{support.stripe.text}}</p>
+              <a class="button button--primary" href="{{stripe}}">{{support.stripe.action}}</a>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer__row">
+        <p>{{footer.by}} <a href="https://www.linkedin.com/in/meigston/">Meigston Ramos</a></p>
+        <p>
+          <a href="{{repo}}">{{footer.code}}</a>
+          <a href="{{repo}}/blob/main/LICENSE">{{footer.license}}</a>
+        </p>
+      </div>
+      <div class="wrap"><p class="footer__warranty">{{footer.warranty}}</p></div>
+    </footer>
+
+    <script src="/assets/app.js" defer></script>
+  </body>
+</html>

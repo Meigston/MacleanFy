@@ -29,6 +29,7 @@
     "icon": "electron scripts/make-icon.cjs",
     "dmg:background": "electron scripts/make-dmg-background.cjs",
     "pix:qr": "node scripts/make-pix-qr.cjs",
+    "site:build": "node site/build.mjs",
     "dist": "electron-vite build && electron-builder --mac"
   },
   "devDependencies": {

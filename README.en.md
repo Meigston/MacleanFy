@@ -146,6 +146,7 @@ src/
   preload/    the only bridge between the interface and the main process
   shared/     the contract of that bridge
   renderer/   the React interface
+site/         the macleanfy.com page, static and dependency-free (`pnpm site:build`)
 ```
 
 The interface ships in Portuguese (Brazil) and English, following the system language.

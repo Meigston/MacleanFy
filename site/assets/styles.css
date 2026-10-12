@@ -1,0 +1,611 @@
+/* Mesma identidade do app: superfícies escuras, linha de 1px, acento em luz. */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fonts/inter-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF,
+    U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fonts/inter-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --bg: #05001d;
+  --bg-raised: #090642;
+  --text: #eef0ff;
+  --text-2: #b9bfde;
+  --text-3: #8d93b8;
+  --accent: #1f9dff;
+  --accent-light: #93dcff;
+  --glow: #13fafe;
+  --line: rgba(164, 184, 255, 0.14);
+  --line-strong: rgba(164, 184, 255, 0.26);
+  --radius: 20px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 84px;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(90% 60% at 80% -10%, rgba(64, 60, 200, 0.45) 0%, transparent 60%),
+    radial-gradient(70% 50% at 0% 30%, rgba(11, 109, 255, 0.16) 0%, transparent 60%),
+    var(--bg);
+  background-repeat: no-repeat;
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p,
+ol,
+figure,
+pre {
+  margin: 0;
+}
+
+a {
+  color: var(--accent-light);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.wrap {
+  width: min(1120px, 100% - 48px);
+  margin-inline: auto;
+}
+
+/* --------------------------------------------------------------------------- Topo */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--line);
+  background: rgba(5, 0, 29, 0.72);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+.nav__row {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  height: 64px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.brand:hover {
+  text-decoration: none;
+}
+
+/* A arte tem fundo próprio; "screen" e a máscara a dissolvem no fundo da página. */
+.brand__symbol {
+  width: 40px;
+  height: 40px;
+  mix-blend-mode: screen;
+  -webkit-mask-image: radial-gradient(closest-side, #000 70%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 70%, transparent 100%);
+}
+
+.brand__name span {
+  background: linear-gradient(90deg, var(--accent), var(--glow));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.nav__links {
+  display: flex;
+  gap: 24px;
+  margin-right: auto;
+}
+
+.nav__links a,
+.nav__lang {
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.nav__links a:hover,
+.nav__lang:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.nav__side {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.nav__github {
+  padding: 7px 14px;
+  border-radius: 99px;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.nav__github:hover {
+  box-shadow: inset 0 0 0 1px rgba(79, 198, 255, 0.6);
+  text-decoration: none;
+}
+
+/* --------------------------------------------------------------------------- Abertura */
+
+.hero {
+  padding: 84px 0 40px;
+}
+
+.hero__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.hero__title {
+  max-width: 15em;
+  font-size: clamp(36px, 6vw, 64px);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+/* A segunda metade da frase fica na própria linha, em vez de quebrar no meio. */
+.hero__title span {
+  display: block;
+  background: linear-gradient(90deg, #4fc6ff, var(--glow));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero__text {
+  max-width: 38em;
+  margin-top: 22px;
+  color: var(--text-2);
+  font-size: clamp(16px, 2vw, 19px);
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 34px;
+}
+
+.hero__note {
+  margin-top: 18px;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.hero__which {
+  max-width: 44em;
+  margin-top: 6px;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+/* O botão principal é contornado e brilha, como no app: o acento é luz, não preenchimento. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(126, 146, 255, 0.08);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.button:hover {
+  background: rgba(126, 146, 255, 0.14);
+  text-decoration: none;
+}
+
+.button--primary {
+  background: linear-gradient(160deg, rgba(79, 198, 255, 0.22), rgba(11, 109, 255, 0.12));
+  box-shadow:
+    inset 0 0 0 1px rgba(79, 198, 255, 0.7),
+    0 0 22px rgba(19, 250, 254, 0.22);
+}
+
+.button--primary:hover {
+  background: linear-gradient(160deg, rgba(79, 198, 255, 0.3), rgba(11, 109, 255, 0.18));
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 246, 255, 0.9),
+    0 0 30px rgba(19, 250, 254, 0.34);
+}
+
+/* --------------------------------------------------------------------------- Capturas */
+
+.shot {
+  margin-top: 56px;
+}
+
+.shot img {
+  width: 100%;
+  border-radius: var(--radius);
+  box-shadow:
+    0 0 0 1px var(--line-strong),
+    0 40px 120px rgba(2, 0, 20, 0.7),
+    0 0 90px rgba(31, 157, 255, 0.16);
+}
+
+.shot figcaption {
+  margin-top: 14px;
+  color: var(--text-3);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------- Seções */
+
+.section {
+  padding: 72px 0;
+}
+
+.section__title {
+  font-size: clamp(26px, 3.6vw, 36px);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.section__text {
+  max-width: 40em;
+  margin-top: 10px;
+  color: var(--text-2);
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 30px;
+}
+
+.grid--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.card {
+  padding: 22px;
+  border-radius: var(--radius);
+  background: linear-gradient(165deg, rgba(126, 146, 255, 0.125) 0%, rgba(126, 146, 255, 0.05) 100%);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.card h3 {
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.card p {
+  margin-top: 8px;
+  color: var(--text-2);
+  font-size: 14.5px;
+}
+
+.card--note {
+  display: flex;
+  align-items: center;
+  background: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 190, 92, 0.4);
+}
+
+.card--note p {
+  margin-top: 0;
+  color: #ffd9a3;
+}
+
+.card--credit {
+  padding: 30px;
+  background: linear-gradient(150deg, rgba(74, 96, 226, 0.3) 0%, rgba(28, 32, 110, 0.18) 60%, rgba(12, 10, 66, 0.22) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(79, 198, 255, 0.4),
+    0 0 40px rgba(19, 250, 254, 0.1);
+}
+
+.card--credit h2 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.card--credit p {
+  max-width: 52em;
+  margin: 10px 0 14px;
+  font-size: 16px;
+}
+
+/* --------------------------------------------------------------------------- Instalar */
+
+.install {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 40px;
+}
+
+.steps {
+  display: grid;
+  gap: 14px;
+  margin-top: 26px;
+  padding: 0;
+  counter-reset: step;
+  list-style: none;
+}
+
+.steps li {
+  position: relative;
+  min-height: 34px;
+  padding-left: 50px;
+  color: var(--text-2);
+  counter-increment: step;
+}
+
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  top: -2px;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: linear-gradient(160deg, rgba(79, 198, 255, 0.26), rgba(11, 109, 255, 0.12));
+  box-shadow: inset 0 0 0 1px rgba(79, 198, 255, 0.6);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.install__older {
+  margin-top: 24px;
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+.code {
+  margin-top: 10px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border-radius: 12px;
+  background: rgba(5, 0, 29, 0.6);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--accent-light);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 13px;
+}
+
+.install__download {
+  display: grid;
+  gap: 12px;
+}
+
+.install__download p {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+/* --------------------------------------------------------------------------- Apoiar */
+
+.support {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  margin-top: 30px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 99px;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
+.card .support__to {
+  margin-top: 14px;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.support__codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.pix {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+
+/* O leitor do banco precisa de preto sobre branco; a margem branca já vem na imagem. */
+.pix img {
+  width: min(200px, 100%);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.pix strong {
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.card .support__hint {
+  margin-top: 18px;
+  color: var(--text-3);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+.support__stripe h3 {
+  margin-top: 14px;
+}
+
+.support__stripe .button {
+  margin-top: 18px;
+}
+
+/* --------------------------------------------------------------------------- Rodapé */
+
+.footer {
+  margin-top: 40px;
+  padding: 34px 0 44px;
+  border-top: 1px solid var(--line);
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+.footer__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.footer__row a + a {
+  margin-left: 20px;
+}
+
+.footer__warranty {
+  max-width: 60em;
+  margin-top: 18px;
+  font-size: 13px;
+}
+
+/* --------------------------------------------------------------------------- Telas menores */
+
+@media (max-width: 900px) {
+  .grid--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid--3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .install,
+  .support {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nav__links {
+    display: none;
+  }
+
+  .nav__side {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .wrap {
+    width: min(1120px, 100% - 32px);
+  }
+
+  .hero {
+    padding-top: 56px;
+  }
+
+  .hero__actions {
+    flex-direction: column;
+    align-self: stretch;
+  }
+
+  .grid--4,
+  .grid--3,
+  .support__codes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .section {
+    padding: 52px 0;
+  }
+
+  .shot img {
+    border-radius: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}

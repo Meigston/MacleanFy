@@ -149,6 +149,7 @@ src/
   preload/    a única ponte entre a interface e o processo principal
   shared/     o contrato dessa ponte
   renderer/   a interface em React
+site/         a página de macleanfy.com, estática e sem dependências (`pnpm site:build`)
 ```
 
 | Comando | O que faz |
