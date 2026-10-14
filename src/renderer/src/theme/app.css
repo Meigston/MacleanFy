@@ -1281,3 +1281,250 @@
   box-shadow: var(--glow-line);
   color: var(--accent-100);
 }
+
+/* ---------------------------------------------------------------------------
+ * Desempenho
+ * ------------------------------------------------------------------------- */
+
+.perf {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 8px;
+}
+
+/* Os cartões mantêm a altura do conteúdo; quem rola é a página. */
+.perf > * {
+  flex: none;
+}
+
+.perf--loading {
+  display: grid;
+  place-items: center;
+}
+
+.perf__diagnosis {
+  gap: 4px;
+}
+
+.finding {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 10px 2px;
+}
+
+.finding + .finding {
+  border-top: 1px solid var(--line);
+}
+
+.finding__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent-300);
+}
+
+.finding--warning .finding__icon {
+  color: var(--warning);
+}
+
+.finding--critical .finding__icon {
+  color: var(--negative);
+}
+
+.finding--ok .finding__icon {
+  color: var(--positive);
+}
+
+.finding__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  user-select: text;
+}
+
+.finding__body strong {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.perf__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.perf__metric {
+  gap: 2px;
+  min-height: 156px;
+}
+
+.perf__label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.perf__label svg {
+  color: var(--accent-300);
+}
+
+.perf__tag {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.perf__value--small {
+  font-size: 20px;
+}
+
+.perf__cores {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 34px;
+  margin: 10px 0 6px;
+}
+
+.perf__core {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.perf__core > span {
+  width: 100%;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--accent-300), rgba(31, 157, 255, 0.7));
+  transition: height 400ms ease;
+}
+
+.perf__meter {
+  margin: 12px 0 8px;
+}
+
+.perf__meter--warning .meter__fill {
+  background: var(--warning);
+}
+
+.perf__meter--critical .meter__fill {
+  background: var(--negative);
+}
+
+.perf__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: auto;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.perf__pressure--normal,
+.perf__thermal--nominal {
+  color: var(--positive);
+}
+
+.perf__pressure--warning,
+.perf__thermal--fair,
+.perf__thermal--serious {
+  color: var(--warning);
+}
+
+.perf__pressure--critical,
+.perf__thermal--critical {
+  color: var(--negative);
+}
+
+.perf__rates {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.perf__rates span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.perf__rates svg {
+  color: var(--accent-300);
+}
+
+.perf__rates strong {
+  margin-left: auto;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.perf__apps {
+  gap: 10px;
+}
+
+.perf__apps-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.perf__table {
+  display: grid;
+  gap: 2px;
+}
+
+.perf__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 110px;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.perf__row:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.perf__name {
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perf__count {
+  margin-left: 8px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.perf__cell {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.perf__cell--on {
+  color: var(--text-primary);
+}

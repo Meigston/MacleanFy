@@ -7,6 +7,7 @@ import { About } from './pages/About';
 import { Cleaner } from './pages/Cleaner';
 import { Maintenance } from './pages/Maintenance';
 import { Overview } from './pages/Overview';
+import { Performance } from './pages/Performance';
 import { Support } from './pages/Support';
 import { Uninstaller } from './pages/Uninstaller';
 import { useStore, type Route } from './state/store';
@@ -15,6 +16,8 @@ function Page({ route }: { route: Route }) {
   switch (route) {
     case 'overview':
       return <Overview />;
+    case 'performance':
+      return <Performance />;
     case 'smart':
       return <Cleaner />;
     case 'uninstaller':

@@ -26,6 +26,8 @@ export const CHANNELS = {
   openExternal: 'shell:open-external',
   reveal: 'shell:reveal',
   copyPixCode: 'support:copy-pix',
+  performanceSample: 'performance:sample',
+  openActivityMonitor: 'shell:activity-monitor',
   updateState: 'update:state',
   updateChanged: 'update:changed',
   updateCheck: 'update:check',
@@ -160,6 +162,76 @@ export interface MaintenanceResultDTO {
   error?: string;
 }
 
+export type ThermalState = 'unknown' | 'nominal' | 'fair' | 'serious' | 'critical';
+export type MemoryPressure = 'normal' | 'warning' | 'critical';
+
+/** Um app e os ajudantes dele, somados. */
+export interface ProcessGroupDTO {
+  name: string;
+  /** Em % de um núcleo: um app ocupando dois núcleos inteiros marca 200. */
+  cpu: number;
+  /** Memória residente somada; aproximada. */
+  memory: number;
+  count: number;
+  /** Processo do próprio macOS. */
+  system: boolean;
+}
+
+export interface BatteryDTO {
+  percent: number;
+  charging: boolean;
+  plugged: boolean;
+  cycles: number;
+  /** Capacidade atual sobre a de fábrica, de 0 a 1. */
+  health: number | null;
+  /** Graus Celsius. */
+  temperature: number | null;
+}
+
+/**
+ * Algo que explica um Mac lento. O diagnóstico só lê: aponta o que pesa e o
+ * que fazer, e nunca encerra nem muda nada.
+ */
+export type PerformanceFinding =
+  | { id: 'memory'; severity: 'warning' | 'critical'; apps: string[] }
+  | { id: 'swap'; severity: 'warning'; used: number; apps: string[] }
+  | { id: 'cpu'; severity: 'warning'; load: number; cores: number; apps: string[] }
+  | { id: 'runaway'; severity: 'warning'; app: string; hours: number; average: number }
+  | { id: 'spotlight'; severity: 'info'; cpu: number }
+  | { id: 'thermal'; severity: 'warning' | 'critical' }
+  | { id: 'uptime'; severity: 'info' | 'warning'; days: number };
+
+export type FindingSeverity = PerformanceFinding['severity'];
+
+/** Como o Mac está agora. Taxas em bytes por segundo, medidas desde a leitura anterior. */
+export interface PerformanceSample {
+  at: number;
+  cpu: {
+    /** De 0 a 1, média de todos os núcleos. */
+    usage: number;
+    cores: number[];
+    /** Média de 1, 5 e 15 minutos. */
+    load: number[];
+  };
+  memory: {
+    total: number;
+    used: number;
+    cached: number;
+    pressure: MemoryPressure;
+    swapUsed: number;
+    swapTotal: number;
+  };
+  disk: { read: number; write: number };
+  network: { iface: string | null; down: number; up: number };
+  battery: BatteryDTO | null;
+  /** Segundos desde que o Mac ligou. */
+  uptime: number;
+  thermal: ThermalState;
+  topCpu: ProcessGroupDTO[];
+  topMemory: ProcessGroupDTO[];
+  findings: PerformanceFinding[];
+}
+
 /**
  * Em que pé está a atualização do app. Quem decide é o processo principal; a
  * interface só mostra e pede o próximo passo.
@@ -203,6 +275,10 @@ export interface MacleanFyApi {
     list(): Promise<InstalledAppDTO[]>;
     onProgress(listener: (progress: AppsProgress) => void): Unsubscribe;
     uninstall(appPaths: string[]): Promise<UninstallResultDTO>;
+  };
+  performance: {
+    sample(): Promise<PerformanceSample>;
+    openActivityMonitor(): Promise<void>;
   };
   maintenance: {
     info(): Promise<MaintenanceInfo>;

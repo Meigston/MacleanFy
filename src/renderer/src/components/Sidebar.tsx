@@ -1,4 +1,4 @@
-import { Gauge, HeartHandshake, Info, PackageX, Sparkles, Wrench, type LucideIcon } from 'lucide-react';
+import { Activity, Gauge, HeartHandshake, Info, PackageX, Sparkles, Wrench, type LucideIcon } from 'lucide-react';
 import { useT } from '../i18n';
 import { GROUPS } from '../lib/catalog';
 import { useStore, type Route } from '../state/store';
@@ -19,6 +19,7 @@ export function Sidebar() {
   const sections: Entry[][] = [
     [
       { route: 'overview', icon: Gauge, label: tr.t('nav.overview') },
+      { route: 'performance', icon: Activity, label: tr.t('nav.performance') },
       { route: 'smart', icon: Sparkles, label: tr.t('nav.smart') },
     ],
     GROUPS.map((group) => ({ route: group.route, icon: group.icon, label: tr.group(group.group) })),

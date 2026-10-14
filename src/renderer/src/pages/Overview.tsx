@@ -1,10 +1,12 @@
 import { Info, Lock, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { CATEGORIES, type CategoryId, type SafetyLevel } from '../../../core/types';
-import type { HistoryEntry } from '../../../shared/api';
+import { useEffect, useState } from 'react';
+import type { HistoryEntry, PerformanceFinding } from '../../../shared/api';
 import { Button, Spinner } from '../components/ui';
 import { useT, type Translator } from '../i18n';
 import { safetyKey } from '../i18n/strings';
 import { ALL_CATEGORY_IDS, CATEGORY_ICONS, GROUPS, GROUP_BY_NAME } from '../lib/catalog';
+import { describeFinding } from '../lib/findings';
 import { useStore } from '../state/store';
 
 type Health = 'excellent' | 'good' | 'attention' | 'critical';
@@ -78,6 +80,19 @@ export function Overview() {
   const scan = useStore((state) => state.scan);
   const navigate = useStore((state) => state.navigate);
 
+  // Uma leitura de desempenho por visita: o que pesa agora entra nas recomendações.
+  const [findings, setFindings] = useState<PerformanceFinding[]>([]);
+  useEffect(() => {
+    let alive = true;
+    window.macleanfy.performance
+      .sample()
+      .then((sample) => alive && setFindings(sample.findings))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const disk = system?.disk;
   const used = disk ? disk.total - disk.free : 0;
   const freeRatio = disk && disk.total > 0 ? disk.free / disk.total : 1;
@@ -107,6 +122,12 @@ export function Overview() {
   const largest = [...withItems].sort((a, b) => results[b]!.totalSize - results[a]!.totalSize);
   const openCategory = (id: CategoryId) => navigate(GROUP_BY_NAME[CATEGORIES[id].group].route);
 
+  const perfRec = (finding: PerformanceFinding): Recommendation => ({
+    id: `perf-${finding.id}`,
+    ...describeFinding(finding, tr),
+    onClick: () => navigate('performance'),
+  });
+
   const recs: Recommendation[] = [];
   if (system && !system.fullDiskAccess) {
     recs.push({
@@ -126,6 +147,8 @@ export function Overview() {
       onClick: () => void scan(),
     });
   }
+  // O que pesa no desempenho vem antes das categorias; o que é só aviso (reiniciar, Spotlight), depois.
+  recs.push(...findings.filter((finding) => finding.severity !== 'info').map(perfRec));
   if (disk && freeRatio < 0.15) {
     recs.push({
       id: 'disk',
@@ -146,6 +169,7 @@ export function Overview() {
       onClick: () => openCategory(id),
     });
   }
+  recs.push(...findings.filter((finding) => finding.severity === 'info').map(perfRec));
   if (recs.length === 0) {
     recs.push({ id: 'ok', icon: ShieldCheck, title: t('rec.clean.title'), text: t('rec.clean.text') });
   }

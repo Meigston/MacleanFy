@@ -14,10 +14,19 @@ import type {
 import { initialLocale, persistLocale, type Locale } from '../i18n/locale';
 import { ALL_CATEGORY_IDS, type GroupRoute } from '../lib/catalog';
 
-export type Route = 'overview' | 'smart' | GroupRoute | 'uninstaller' | 'maintenance' | 'support' | 'about';
+export type Route =
+  | 'overview'
+  | 'performance'
+  | 'smart'
+  | GroupRoute
+  | 'uninstaller'
+  | 'maintenance'
+  | 'support'
+  | 'about';
 
 const ROUTES: Route[] = [
   'overview',
+  'performance',
   'smart',
   'system',
   'development',

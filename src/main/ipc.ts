@@ -25,10 +25,12 @@ import {
 import { SUPPORT, isPixOption } from '../shared/support';
 import { Engine } from './engine';
 import { HistoryStore } from './history';
+import { PerformanceMonitor } from './perf/monitor';
 import { getMaintenanceInfo, getSystemInfo, runMaintenance } from './system';
 import { Updater } from './updater';
 
 const FULL_DISK_ACCESS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
+const ACTIVITY_MONITOR = '/System/Applications/Utilities/Activity Monitor.app';
 
 /** A primeira busca por versão nova espera o app assentar; depois, uma por dia enquanto ele estiver aberto. */
 const UPDATE_FIRST_CHECK_MS = 10 * 1000;
@@ -85,6 +87,7 @@ export function isAllowedExternal(url: string): boolean {
 
 export function registerIpc(): void {
   const engine = new Engine();
+  const performance = new PerformanceMonitor();
   const history = new HistoryStore(join(app.getPath('userData'), 'history.json'));
   const rendererFile = pathToFileURL(join(__dirname, '../renderer/index.html')).href;
 
@@ -205,6 +208,11 @@ export function registerIpc(): void {
     return result;
   });
 
+  handle(CHANNELS.performanceSample, () => performance.sample());
+  // O app só lê: encerrar um processo fica com o Monitor de Atividade, que mostra o que se perde.
+  handle(CHANNELS.openActivityMonitor, async () => {
+    await shell.openPath(ACTIVITY_MONITOR);
+  });
   handle(CHANNELS.maintenanceInfo, () => getMaintenanceInfo());
   handle(CHANNELS.maintenanceRun, (_sender, task: MaintenanceTask) => runMaintenance(task));
 

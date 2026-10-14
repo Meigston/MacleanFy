@@ -17,6 +17,10 @@ export interface Translator {
   plural(key: PluralKey, n: number): string;
   /** Unidades decimais, como o Finder mostra. */
   size(bytes: number): string;
+  /** Memória em base 1024, como o Monitor de Atividade mostra (48 GB, não 51,5). */
+  memory(bytes: number): string;
+  /** "Chrome, Xcode e Slack". */
+  list(items: string[]): string;
   number(n: number): string;
   date(ms: number): string;
   ago(ms: number): string;
@@ -29,6 +33,19 @@ export function createTranslator(locale: Locale): Translator {
   const numberFormat = new Intl.NumberFormat(locale);
   const dateFormat = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' });
   const relative = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  const listFormat = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
+
+  const format = (bytes: number, base: number) => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+    const unit = Math.min(Math.floor(Math.log(bytes) / Math.log(base)), UNITS.length - 1);
+    const value = bytes / base ** unit;
+    const digits = unit < 2 ? 0 : value < 10 ? 2 : value < 100 ? 1 : 0;
+    const formatted = new Intl.NumberFormat(locale, {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(value);
+    return `${formatted} ${UNITS[unit]}`;
+  };
 
   const t = (key: StringKey, vars?: Vars): string =>
     table[key].replace(/\{(\w+)\}/g, (match, name: string) => (vars && name in vars ? String(vars[name]) : match));
@@ -37,17 +54,9 @@ export function createTranslator(locale: Locale): Translator {
     locale,
     t,
     plural: (key, n) => t(`plural.${key}.${n === 1 ? 'one' : 'other'}`, { n: numberFormat.format(n) }),
-    size(bytes) {
-      if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-      const unit = Math.min(Math.floor(Math.log10(bytes) / 3), UNITS.length - 1);
-      const value = bytes / 1000 ** unit;
-      const digits = unit < 2 ? 0 : value < 10 ? 2 : value < 100 ? 1 : 0;
-      const formatted = new Intl.NumberFormat(locale, {
-        minimumFractionDigits: digits,
-        maximumFractionDigits: digits,
-      }).format(value);
-      return `${formatted} ${UNITS[unit]}`;
-    },
+    size: (bytes) => format(bytes, 1000),
+    memory: (bytes) => format(bytes, 1024),
+    list: (items) => listFormat.format(items),
     number: (n) => numberFormat.format(n),
     date: (ms) => dateFormat.format(ms),
     ago(ms) {

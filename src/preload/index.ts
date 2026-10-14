@@ -32,6 +32,10 @@ const api: MacleanFyApi = {
     onProgress: (listener) => subscribe(CHANNELS.appsProgress, listener),
     uninstall: (appPaths) => ipcRenderer.invoke(CHANNELS.appsUninstall, appPaths),
   },
+  performance: {
+    sample: () => ipcRenderer.invoke(CHANNELS.performanceSample),
+    openActivityMonitor: () => ipcRenderer.invoke(CHANNELS.openActivityMonitor),
+  },
   maintenance: {
     info: () => ipcRenderer.invoke(CHANNELS.maintenanceInfo),
     run: (task) => ipcRenderer.invoke(CHANNELS.maintenanceRun, task),
