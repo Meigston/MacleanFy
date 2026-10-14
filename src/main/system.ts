@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { app } from 'electron';
 import type { MaintenanceInfo, MaintenanceResultDTO, MaintenanceTask, SystemInfo } from '../shared/api';
+import { DS_STORE_DOMAIN, DS_STORE_KEYS, parseDefaultsBool, parseSpotlightStatus } from './maintenance';
 import { CAPACITY_SCRIPT, parseCapacity, parseLocalSnapshots, purgeableBytes } from './volume';
 
 function run(command: string, args: string[], timeout = 15000): Promise<string> {
@@ -86,17 +87,38 @@ export async function getSystemInfo(): Promise<SystemInfo> {
   };
 }
 
+/** O Finder deixa de gravar .DS_Store só com as duas chaves ligadas. */
+async function readNoDsStore(): Promise<boolean> {
+  const values = await Promise.all(
+    DS_STORE_KEYS.map((key) =>
+      run('/usr/bin/defaults', ['read', DS_STORE_DOMAIN, key])
+        .then(parseDefaultsBool)
+        .catch(() => false)
+    )
+  );
+  return values.every(Boolean);
+}
+
 export async function getMaintenanceInfo(): Promise<MaintenanceInfo> {
-  const [capacity, snapshots] = await Promise.all([
+  const [capacity, snapshots, spotlight, noDsStore] = await Promise.all([
     run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', CAPACITY_SCRIPT])
       .then(parseCapacity)
       .catch(() => null),
     run('/usr/bin/tmutil', ['listlocalsnapshots', '/'])
       .then(parseLocalSnapshots)
       .catch(() => []),
+    run('/usr/bin/mdutil', ['-s', '/'])
+      .then(parseSpotlightStatus)
+      .catch(() => null),
+    readNoDsStore(),
   ]);
-  return { purgeable: capacity ? purgeableBytes(capacity) : null, snapshots };
+  return { purgeable: capacity ? purgeableBytes(capacity) : null, snapshots, spotlight, noDsStore };
 }
+
+type MaintenanceCommand =
+  /** Roda como root, pelo diálogo de senha do macOS. */
+  | { admin: true; script: string }
+  | { admin: false; file: string; args: string[] };
 
 /**
  * Comandos fixos, por caminho absoluto. Nada vindo da interface entra na linha
@@ -106,23 +128,33 @@ export async function getMaintenanceInfo(): Promise<MaintenanceInfo> {
  * de disco que fica na memória — não libera espaço nenhum, e deixa o Mac mais lento
  * até o cache se refazer.
  */
-const MAINTENANCE_COMMANDS: Record<MaintenanceTask, string> = {
-  dns: '/usr/bin/dscacheutil -flushcache && /usr/bin/killall -HUP mDNSResponder',
-  snapshots: '/usr/bin/tmutil deletelocalsnapshots /',
+const MAINTENANCE_COMMANDS: Record<MaintenanceTask, MaintenanceCommand> = {
+  dns: { admin: true, script: '/usr/bin/dscacheutil -flushcache && /usr/bin/killall -HUP mDNSResponder' },
+  quicklook: { admin: false, file: '/usr/bin/qlmanage', args: ['-r', 'cache'] },
+  // Só pede o índice novo: o macOS o refaz em segundo plano, e o comando volta na hora.
+  spotlight: { admin: true, script: '/usr/bin/mdutil -E /' },
+  snapshots: { admin: true, script: '/usr/bin/tmutil deletelocalsnapshots /' },
 };
 
 /**
- * As duas tarefas exigem root. Em vez do `sudo -n` do CLI — que só funciona com
- * sudo sem senha —, o osascript abre o diálogo de autenticação do próprio macOS.
+ * O que exige root não passa pelo `sudo -n` do CLI — que só funciona com sudo
+ * sem senha —: o osascript abre o diálogo de autenticação do próprio macOS.
  */
 export function runMaintenance(task: MaintenanceTask): Promise<MaintenanceResultDTO> {
-  const command = MAINTENANCE_COMMANDS[task];
+  const command = Object.hasOwn(MAINTENANCE_COMMANDS, task) ? MAINTENANCE_COMMANDS[task] : undefined;
   if (!command) return Promise.resolve({ success: false, error: `Unknown task: ${String(task)}` });
+
+  if (!command.admin) {
+    return run(command.file, command.args, 60000).then(
+      () => ({ success: true }),
+      (error: Error) => ({ success: false, error: error.message })
+    );
+  }
 
   return new Promise((resolve) => {
     execFile(
       '/usr/bin/osascript',
-      ['-e', `do shell script "${command}" with administrator privileges`],
+      ['-e', `do shell script "${command.script}" with administrator privileges`],
       { timeout: 120000 },
       (error, _stdout, stderr) => {
         if (!error) resolve({ success: true });
@@ -131,4 +163,20 @@ export function runMaintenance(task: MaintenanceTask): Promise<MaintenanceResult
       }
     );
   });
+}
+
+/**
+ * Preferência da conta, sem senha. Desligar apaga as chaves em vez de gravar
+ * `false`: volta exatamente ao padrão do macOS.
+ */
+export async function setNoDsStore(on: boolean): Promise<MaintenanceResultDTO> {
+  try {
+    for (const key of DS_STORE_KEYS) {
+      if (on) await run('/usr/bin/defaults', ['write', DS_STORE_DOMAIN, key, '-bool', 'true']);
+      else await run('/usr/bin/defaults', ['delete', DS_STORE_DOMAIN, key]).catch(() => undefined);
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }

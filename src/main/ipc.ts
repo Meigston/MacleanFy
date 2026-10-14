@@ -26,11 +26,13 @@ import { SUPPORT, isPixOption } from '../shared/support';
 import { Engine } from './engine';
 import { HistoryStore } from './history';
 import { PerformanceMonitor } from './perf/monitor';
-import { getMaintenanceInfo, getSystemInfo, runMaintenance } from './system';
+import { listStartupItems } from './startup';
+import { getMaintenanceInfo, getSystemInfo, runMaintenance, setNoDsStore } from './system';
 import { Updater } from './updater';
 
 const FULL_DISK_ACCESS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
 const ACTIVITY_MONITOR = '/System/Applications/Utilities/Activity Monitor.app';
+const LOGIN_ITEMS_URL = 'x-apple.systempreferences:com.apple.LoginItems-Settings.extension';
 
 /** A primeira busca por versão nova espera o app assentar; depois, uma por dia enquanto ele estiver aberto. */
 const UPDATE_FIRST_CHECK_MS = 10 * 1000;
@@ -93,6 +95,8 @@ export function registerIpc(): void {
 
   // Apps devolvidos pela última listagem, por caminho do bundle.
   let knownApps = new Map<string, AppInfo>();
+  // Plists de inicialização da última listagem: só eles podem ser mostrados no Finder.
+  let knownStartup = new Set<string>();
 
   // Rodando do código-fonte não há instalação para atualizar: o atualizador fica inerte.
   const updater = new Updater(app.isPackaged ? electronUpdater.autoUpdater : null, (state) => {
@@ -213,8 +217,17 @@ export function registerIpc(): void {
   handle(CHANNELS.openActivityMonitor, async () => {
     await shell.openPath(ACTIVITY_MONITOR);
   });
+  handle(CHANNELS.startupList, async () => {
+    const items = await listStartupItems();
+    knownStartup = new Set(items.map((item) => item.path));
+    return items;
+  });
+  // Ligar e desligar fica com os Ajustes, que mostram o que cada item é e pedem a senha quando precisa.
+  handle(CHANNELS.openLoginItems, () => shell.openExternal(LOGIN_ITEMS_URL));
+
   handle(CHANNELS.maintenanceInfo, () => getMaintenanceInfo());
   handle(CHANNELS.maintenanceRun, (_sender, task: MaintenanceTask) => runMaintenance(task));
+  handle(CHANNELS.maintenanceNoDsStore, (_sender, on: unknown) => setNoDsStore(on === true));
 
   handle(CHANNELS.openFullDiskAccess, () => shell.openExternal(FULL_DISK_ACCESS_URL));
 
@@ -230,6 +243,6 @@ export function registerIpc(): void {
   handle(CHANNELS.reveal, (_sender, path: unknown) => {
     if (typeof path !== 'string') return;
     const isRelated = [...knownApps.values()].some((info) => info.related.some((r) => r.path === path));
-    if (engine.knows(path) || knownApps.has(path) || isRelated) shell.showItemInFolder(path);
+    if (engine.knows(path) || knownApps.has(path) || isRelated || knownStartup.has(path)) shell.showItemInFolder(path);
   });
 }

@@ -36,9 +36,14 @@ const api: MacleanFyApi = {
     sample: () => ipcRenderer.invoke(CHANNELS.performanceSample),
     openActivityMonitor: () => ipcRenderer.invoke(CHANNELS.openActivityMonitor),
   },
+  startup: {
+    list: () => ipcRenderer.invoke(CHANNELS.startupList),
+    openSettings: () => ipcRenderer.invoke(CHANNELS.openLoginItems),
+  },
   maintenance: {
     info: () => ipcRenderer.invoke(CHANNELS.maintenanceInfo),
     run: (task) => ipcRenderer.invoke(CHANNELS.maintenanceRun, task),
+    setNoDsStore: (on) => ipcRenderer.invoke(CHANNELS.maintenanceNoDsStore, on),
   },
   updates: {
     state: () => ipcRenderer.invoke(CHANNELS.updateState),

@@ -22,6 +22,9 @@ export const CHANNELS = {
   appsUninstall: 'apps:uninstall',
   maintenanceRun: 'maintenance:run',
   maintenanceInfo: 'maintenance:info',
+  maintenanceNoDsStore: 'maintenance:no-ds-store',
+  startupList: 'startup:list',
+  openLoginItems: 'shell:login-items',
   openFullDiskAccess: 'shell:full-disk-access',
   openExternal: 'shell:open-external',
   reveal: 'shell:reveal',
@@ -146,20 +149,48 @@ export interface UninstallResultDTO {
   errors: string[];
 }
 
-export type MaintenanceTask = 'dns' | 'snapshots';
+export type MaintenanceTask = 'dns' | 'quicklook' | 'spotlight' | 'snapshots';
 
-/** O que a tela de manutenção mostra antes de qualquer tarefa rodar. */
+/** O que a tela de manutenção mostra antes de qualquer tarefa rodar. Nulo quando não deu para saber. */
 export interface MaintenanceInfo {
-  /** Bytes que o macOS libera sozinho quando precisa; nulo quando não deu para medir. */
+  /** Bytes que o macOS libera sozinho quando precisa. */
   purgeable: number | null;
   /** Datas dos snapshots locais do Time Machine no disco de inicialização. */
   snapshots: string[];
+  /** Se o Spotlight indexa o disco de inicialização. */
+  spotlight: boolean | null;
+  /** Se o Finder deixou de gravar .DS_Store em pastas de rede e pendrives. */
+  noDsStore: boolean | null;
 }
 
 export interface MaintenanceResultDTO {
   success: boolean;
   cancelled?: boolean;
   error?: string;
+}
+
+/** De quem é o item: da sua conta, de todas as contas ou do sistema. */
+export type StartupScope = 'user' | 'agent' | 'daemon';
+/**
+ * Ao carregar (entrar na conta, ou ligar o Mac para o sistema), de tempos em tempos ou quando
+ * chamado; `unknown` quando só o root lê o plist.
+ */
+export type StartupWhen = 'load' | 'schedule' | 'demand' | 'unknown';
+
+/** Algo que o launchd abre sozinho. Só para ler: desligar fica com os Ajustes do Mac. */
+export interface StartupItemDTO {
+  label: string;
+  /** O plist que cadastra o item; é ele que "Mostrar no Finder" aponta. */
+  path: string;
+  scope: StartupScope;
+  /** Nome do app dono, quando dá para saber. */
+  app: string | null;
+  program: string | null;
+  when: StartupWhen;
+  /** O programa que ele chama não existe mais: sobra de app removido. */
+  missing: boolean;
+  disabled: boolean;
+  running: boolean;
 }
 
 export type ThermalState = 'unknown' | 'nominal' | 'fair' | 'serious' | 'critical';
@@ -280,9 +311,16 @@ export interface MacleanFyApi {
     sample(): Promise<PerformanceSample>;
     openActivityMonitor(): Promise<void>;
   };
+  startup: {
+    list(): Promise<StartupItemDTO[]>;
+    /** Ajustes → Geral → Itens de Início, onde se liga e desliga cada um. */
+    openSettings(): Promise<void>;
+  };
   maintenance: {
     info(): Promise<MaintenanceInfo>;
     run(task: MaintenanceTask): Promise<MaintenanceResultDTO>;
+    /** Liga ou desliga a gravação de .DS_Store em pastas de rede e pendrives. */
+    setNoDsStore(on: boolean): Promise<MaintenanceResultDTO>;
   };
   updates: {
     state(): Promise<UpdateState>;

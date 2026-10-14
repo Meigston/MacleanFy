@@ -50,6 +50,30 @@ export function Checkbox({ state, onChange, label, disabled }: CheckboxProps) {
   );
 }
 
+interface SwitchProps {
+  on: boolean;
+  onChange(on: boolean): void;
+  label: string;
+  disabled?: boolean;
+}
+
+/** Liga e desliga um ajuste que vale na hora, sem botão de confirmar. */
+export function Switch({ on, onChange, label, disabled }: SwitchProps) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      className="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+    >
+      <span className="switch__thumb" />
+    </button>
+  );
+}
+
 const SAFETY_ICONS = { safe: ShieldCheck, moderate: ShieldAlert, risky: TriangleAlert };
 
 /** O nível de risco nunca é só cor: vem sempre com ícone e nome. */

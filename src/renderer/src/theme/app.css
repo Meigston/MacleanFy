@@ -962,6 +962,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+  padding-bottom: 8px;
 }
 
 .task {
@@ -1032,6 +1033,34 @@
 .task__result--fail svg {
   flex: none;
   color: var(--warning);
+}
+
+/* Ajuste que liga e desliga: uma faixa na largura toda, com o interruptor à direita. */
+.task--setting {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  gap: 18px;
+}
+
+.task--setting .task__icon {
+  flex: none;
+  margin-bottom: 0;
+}
+
+.task__setting-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.task__setting-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1527,4 +1556,109 @@
 
 .perf__cell--on {
   color: var(--text-primary);
+}
+
+/* Itens em segundo plano */
+
+.startup {
+  gap: 10px;
+}
+
+.startup__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.startup__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.startup__broken {
+  color: var(--warning);
+}
+
+.startup__loading {
+  display: grid;
+  place-items: center;
+  padding: 18px 0;
+}
+
+.startup__row {
+  grid-template-columns: minmax(0, 1fr) 150px 190px 26px;
+}
+
+.startup__row:hover .item__reveal,
+.startup__row .item__reveal:focus-visible {
+  opacity: 1;
+}
+
+.startup__name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.startup__name strong,
+.startup__name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.startup__name strong {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.startup__name span {
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.startup__when {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.startup__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+}
+
+.startup__status--on::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--positive);
+  content: '';
+}
+
+.startup__status--on {
+  color: var(--text-secondary);
+}
+
+.startup__status--off {
+  color: var(--text-faint);
+}
+
+.startup__status--missing {
+  color: var(--text-primary);
+}
+
+.startup__status--missing svg {
+  flex: none;
+  color: var(--warning);
+}
+
+.startup__more {
+  align-self: flex-start;
 }

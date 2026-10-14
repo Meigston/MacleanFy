@@ -47,6 +47,13 @@ shasum -a 256 ~/Downloads/MacleanFy-arm64.dmg
 **Visão geral.** Saúde do disco, espaço recuperável por grupo, o que já foi liberado e
 recomendações do que limpar primeiro.
 
+**Desempenho.** Processador por núcleo, memória e pressão, swap, disco, rede, bateria e os
+apps que mais pesam, atualizando a cada 2 segundos. O diagnóstico aponta por que o Mac pode
+estar lento — memória no limite, swap alto, processador ocupado há minutos, processo preso
+num laço, Spotlight indexando, Mac quente, dias demais sem reiniciar — e só lê: nada é
+encerrado. Embaixo, os itens em segundo plano de outros fabricantes, com quando cada um roda
+e os quebrados, que apontam para programas que não existem mais.
+
 **Limpeza.** Dezesseis categorias em cinco grupos. Cada uma traz o nível de risco, e dá para
 abrir a categoria e escolher item a item.
 
@@ -61,8 +68,9 @@ abrir a categoria e escolher item a item.
 **Desinstalador.** Lista os aplicativos com o tamanho do app e dos arquivos que ele deixou
 na Biblioteca, e manda tudo para a Lixeira.
 
-**Manutenção.** Limpar o cache de DNS e apagar os snapshots locais do Time Machine, que são
-o grosso do espaço purgável.
+**Manutenção.** Limpar o cache de DNS, refazer as miniaturas do Quick Look, reindexar o
+Spotlight e apagar os snapshots locais do Time Machine, que são o grosso do espaço purgável.
+Tem também a opção de o Finder não criar `.DS_Store` em pastas de rede e pendrives.
 
 **Atualizações.** O app consulta as versões do projeto no GitHub ao abrir e uma vez por dia,
 sem mandar dados seus. Quando há versão nova ele avisa; só baixa se você pedir, e instala
