@@ -65,6 +65,12 @@ abrir a categoria e escolher item a item.
 | Navegadores | cache do Chrome, Safari, Firefox e Arc |
 | Arquivos grandes | arquivos acima de 500 MB em Downloads e Documentos |
 
+**Espaço em disco.** Mede a pasta pessoal e mostra onde está o espaço, pasta por pasta, do
+maior para o menor, com a parte do disco que ela ocupa. Uma medida só cobre três níveis, e
+a navegação dentro deles é instantânea; o que estiver abaixo é medido quando você entra. Dá
+para mostrar qualquer item no Finder ou mandá-lo para a Lixeira — menos as pastas do primeiro
+nível da conta e da Biblioteca.
+
 **Desinstalador.** Lista os aplicativos com o tamanho do app e dos arquivos que ele deixou
 na Biblioteca — caches, preferências, dados de WebKit, cookies, estado das janelas e o agente
 de login — e manda tudo para a Lixeira. Dá para manter as configurações e os documentos, para

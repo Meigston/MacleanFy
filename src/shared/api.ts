@@ -24,6 +24,9 @@ export const CHANNELS = {
   maintenanceInfo: 'maintenance:info',
   maintenanceNoDsStore: 'maintenance:no-ds-store',
   startupList: 'startup:list',
+  diskList: 'disk:list',
+  diskProgress: 'disk:progress',
+  diskTrash: 'disk:trash',
   openLoginItems: 'shell:login-items',
   openFullDiskAccess: 'shell:full-disk-access',
   openExternal: 'shell:open-external',
@@ -179,6 +182,34 @@ export interface MaintenanceResultDTO {
   error?: string;
 }
 
+export interface DiskEntryDTO {
+  name: string;
+  path: string;
+  /** Bytes ocupados no disco. */
+  size: number;
+  directory: boolean;
+}
+
+/** Uma pasta da conta e o que tem dentro, do maior para o menor. */
+export interface DiskFolderDTO {
+  path: string;
+  /** Da pasta pessoal até aqui. */
+  crumbs: Array<{ name: string; path: string }>;
+  size: number;
+  entries: DiskEntryDTO[];
+  /** Quando a pasta pessoal foi medida. */
+  scannedAt: number;
+  /** Tamanho da pasta pessoal inteira. */
+  home: number;
+  disk: { total: number; free: number };
+}
+
+/** Enquanto mede: quanto do primeiro nível já está somado e por onde o du anda. */
+export interface DiskProgress {
+  bytes: number;
+  path: string;
+}
+
 /** De quem é o item: da sua conta, de todas as contas ou do sistema. */
 export type StartupScope = 'user' | 'agent' | 'daemon';
 /**
@@ -320,6 +351,16 @@ export interface MacleanFyApi {
   performance: {
     sample(): Promise<PerformanceSample>;
     openActivityMonitor(): Promise<void>;
+  };
+  disk: {
+    /**
+     * Sem caminho, a pasta pessoal. `cachedOnly` não mede nada: devolve nulo se
+     * ainda não houver medida. `refresh` mede tudo de novo.
+     */
+    list(path?: string, options?: { refresh?: boolean; cachedOnly?: boolean }): Promise<DiskFolderDTO | null>;
+    onProgress(listener: (progress: DiskProgress) => void): Unsubscribe;
+    /** Só algo que a última listagem mostrou. */
+    trash(path: string): Promise<boolean>;
   };
   startup: {
     list(): Promise<StartupItemDTO[]>;

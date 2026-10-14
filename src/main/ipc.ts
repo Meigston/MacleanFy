@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { CATEGORIES, type CategoryId } from '../core/types';
 import { listInstalledApps, uninstallApps, type AppInfo } from '../core/apps';
+import { validatePathSafety } from '../core/utils/fs';
 import {
   CHANNELS,
   type CleanOptions,
@@ -24,6 +25,7 @@ import {
   type UpdateState,
 } from '../shared/api';
 import { SUPPORT, isPixOption } from '../shared/support';
+import { DiskMap } from './disk';
 import { Engine } from './engine';
 import { HistoryStore } from './history';
 import { PerformanceMonitor } from './perf/monitor';
@@ -100,6 +102,10 @@ export function registerIpc(): void {
   let knownSystem = new Map<string, Array<SystemFile & { size: number }>>();
   // Plists de inicialização da última listagem: só eles podem ser mostrados no Finder.
   let knownStartup = new Set<string>();
+  // O mapa do espaço da conta, e o que a última pasta listada mostrou.
+  const disk = new DiskMap();
+  let knownDisk = new Map<string, number>();
+  app.on('will-quit', () => disk.cancel());
 
   // Rodando do código-fonte não há instalação para atualizar: o atualizador fica inerte.
   const updater = new Updater(app.isPackaged ? electronUpdater.autoUpdater : null, (state) => {
@@ -257,6 +263,30 @@ export function registerIpc(): void {
   handle(CHANNELS.openActivityMonitor, async () => {
     await shell.openPath(ACTIVITY_MONITOR);
   });
+  handle(CHANNELS.diskList, async (sender, path: unknown, options: unknown) => {
+    const { refresh, cachedOnly } = (options ?? {}) as { refresh?: unknown; cachedOnly?: unknown };
+    const folder = await disk.list(
+      typeof path === 'string' ? path : undefined,
+      { refresh: refresh === true, cachedOnly: cachedOnly === true },
+      (progress) => {
+        if (!sender.isDestroyed()) sender.send(CHANNELS.diskProgress, progress);
+      }
+    );
+    if (folder) knownDisk = new Map(folder.entries.map((entry) => [entry.path, entry.size]));
+    return folder;
+  });
+
+  // Vai para a Lixeira, de onde dá para trazer de volta.
+  handle(CHANNELS.diskTrash, async (_sender, path: unknown) => {
+    if (typeof path !== 'string' || !knownDisk.has(path) || !disk.canTrash(path) || validatePathSafety(path) !== null) {
+      return false;
+    }
+    await shell.trashItem(path);
+    disk.remove(path, knownDisk.get(path) ?? 0);
+    knownDisk.delete(path);
+    return true;
+  });
+
   handle(CHANNELS.startupList, async () => {
     const items = await listStartupItems();
     knownStartup = new Set(items.map((item) => item.path));
@@ -284,7 +314,7 @@ export function registerIpc(): void {
     if (typeof path !== 'string') return;
     const isRelated = [...knownApps.values()].some((info) => info.related.some((r) => r.path === path));
     const isSystem = [...knownSystem.values()].some((files) => files.some((file) => file.path === path));
-    if (engine.knows(path) || knownApps.has(path) || isRelated || isSystem || knownStartup.has(path)) {
+    if (engine.knows(path) || knownApps.has(path) || isRelated || isSystem || knownStartup.has(path) || knownDisk.has(path)) {
       shell.showItemInFolder(path);
     }
   });

@@ -20,6 +20,7 @@ export type Route =
   | 'performance'
   | 'smart'
   | GroupRoute
+  | 'disk'
   | 'uninstaller'
   | 'maintenance'
   | 'support'
@@ -34,6 +35,7 @@ const ROUTES: Route[] = [
   'storage',
   'browsers',
   'large',
+  'disk',
   'uninstaller',
   'maintenance',
   'support',
@@ -70,6 +72,9 @@ interface State {
   appsProgress: AppsProgress | null;
   appSelection: ReadonlySet<string>;
 
+  /** Medindo o espaço da conta; a captura de tela espera acabar. */
+  diskBusy: boolean;
+
   update: UpdateState;
   /** O aviso de atualização está aberto? Abre sozinho uma vez por versão e quando ela fica pronta. */
   updatePrompt: boolean;
@@ -86,6 +91,7 @@ interface State {
   toggleApp(path: string): void;
   uninstallSelected(options?: UninstallOptionsDTO): Promise<UninstallResultDTO>;
   setUpdatePrompt(open: boolean): void;
+  setDiskBusy(busy: boolean): void;
 }
 
 /**
@@ -121,6 +127,7 @@ export const useStore = create<State>((set, get) => ({
 
   apps: null,
   appsLoading: false,
+  diskBusy: false,
   appsProgress: null,
   appSelection: new Set(),
 
@@ -246,6 +253,10 @@ export const useStore = create<State>((set, get) => ({
 
   setUpdatePrompt(open) {
     set({ updatePrompt: open });
+  },
+
+  setDiskBusy(busy) {
+    set({ diskBusy: busy });
   },
 }));
 

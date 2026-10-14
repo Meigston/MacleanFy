@@ -1673,3 +1673,266 @@
 .startup__more {
   align-self: flex-start;
 }
+
+/* ---------------------------------------------------------------------------
+ * Espaço em disco
+ * ------------------------------------------------------------------------- */
+
+.disk {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 8px;
+}
+
+.disk > * {
+  flex: none;
+}
+
+.disk__measured {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.disk__current {
+  max-width: 560px;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.disk__intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 460px;
+  text-align: center;
+}
+
+.disk__intro .btn {
+  margin-top: 8px;
+}
+
+.disk__volume {
+  gap: 12px;
+}
+
+/* Pasta pessoal, o resto do que está usado e, no trilho, o livre. */
+.disk__stack {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.disk__segment {
+  min-width: 2px;
+  border-radius: 4px;
+}
+
+.disk__segment--home,
+.disk__swatch--home {
+  background: var(--accent-400);
+}
+
+.disk__segment--other,
+.disk__swatch--other {
+  background: var(--neutral-600);
+}
+
+.disk__swatch--free {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.disk__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.disk__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.disk__legend strong {
+  color: var(--text-primary);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.disk__swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.disk__notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.disk__folder {
+  gap: 10px;
+}
+
+.disk__crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text-faint);
+}
+
+.disk__up {
+  margin-right: 6px;
+  opacity: 1;
+}
+
+.disk__up:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.disk__crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.disk__crumb button {
+  max-width: 220px;
+  overflow: hidden;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.disk__crumb button:hover:not(.disk__crumb--here) {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+}
+
+.disk__crumb button.disk__crumb--here {
+  color: var(--text-primary);
+  font-weight: 500;
+  cursor: default;
+}
+
+.disk__total {
+  margin-left: auto;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.disk__list {
+  display: grid;
+  gap: 2px;
+}
+
+.disk__row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1.2fr) minmax(0, 1fr) 84px 56px 60px;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.disk__row:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.disk__row--folder {
+  cursor: pointer;
+}
+
+.disk__row--folder:hover,
+.disk__row--folder:focus-visible {
+  background: rgba(126, 146, 255, 0.12);
+}
+
+.disk__icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+}
+
+.disk__row--folder .disk__icon {
+  color: var(--accent-300);
+}
+
+.disk__name {
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.disk__row--rest .disk__name {
+  grid-column: 2 / -1;
+  color: var(--text-tertiary);
+}
+
+.disk__bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.disk__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(31, 157, 255, 0.75), var(--accent-300));
+}
+
+.disk__size {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.disk__share {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.disk__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.disk__row:hover .item__reveal,
+.disk__row .item__reveal:focus-visible {
+  opacity: 1;
+}
+
+.disk__trash:hover {
+  color: var(--negative);
+}
