@@ -15,6 +15,12 @@ import { exists, getSize, isProtectedPath, validatePathSafety } from './utils/in
 export interface RelatedPath {
   path: string;
   size: number;
+  /**
+   * Settings and documents the app keeps (Application Support, Preferences,
+   * Containers): what someone reinstalling it later would want back. Caches,
+   * logs, web storage and saved window state are not.
+   */
+  personal: boolean;
 }
 
 export interface AppInfo {
@@ -42,18 +48,34 @@ export interface ListAppsOptions {
 /** Removes one path and reports whether it is gone. */
 export type RemoveFn = (path: string) => Promise<boolean>;
 
-const RELATED_PATHS_TEMPLATES = [
-  ['Library', 'Application Support', '{APP_NAME}'],
-  ['Library', 'Preferences', '{BUNDLE_ID}.plist'],
-  ['Library', 'Preferences', '{APP_NAME}.plist'],
-  ['Library', 'Caches', '{APP_NAME}'],
-  ['Library', 'Caches', '{BUNDLE_ID}'],
-  ['Library', 'Logs', '{APP_NAME}'],
-  ['Library', 'Saved Application State', '{BUNDLE_ID}.savedState'],
-  ['Library', 'WebKit', '{APP_NAME}'],
-  ['Library', 'HTTPStorages', '{BUNDLE_ID}'],
-  ['Library', 'Containers', '{BUNDLE_ID}'],
-  ['Library', 'Group Containers', '*.{APP_NAME}'],
+export interface UninstallOptions {
+  /** Leave settings and documents in place, for a later reinstall. */
+  keepPersonal?: boolean;
+}
+
+/** Where apps leave files in ~/Library, and whether each holds personal data. */
+const RELATED_PATHS_TEMPLATES: Array<{ parts: string[]; personal: boolean }> = [
+  { parts: ['Library', 'Application Support', '{APP_NAME}'], personal: true },
+  { parts: ['Library', 'Application Support', '{BUNDLE_ID}'], personal: true },
+  { parts: ['Library', 'Preferences', '{BUNDLE_ID}.plist'], personal: true },
+  { parts: ['Library', 'Preferences', '{APP_NAME}.plist'], personal: true },
+  { parts: ['Library', 'Preferences', 'ByHost', '{BUNDLE_ID}.*.plist'], personal: true },
+  { parts: ['Library', 'Containers', '{BUNDLE_ID}'], personal: true },
+  { parts: ['Library', 'Group Containers', '*.{APP_NAME}'], personal: true },
+  { parts: ['Library', 'Group Containers', '*.{BUNDLE_ID}'], personal: true },
+  { parts: ['Library', 'Application Scripts', '{BUNDLE_ID}'], personal: true },
+  { parts: ['Library', 'Caches', '{APP_NAME}'], personal: false },
+  { parts: ['Library', 'Caches', '{BUNDLE_ID}'], personal: false },
+  { parts: ['Library', 'Logs', '{APP_NAME}'], personal: false },
+  { parts: ['Library', 'Logs', '{BUNDLE_ID}'], personal: false },
+  { parts: ['Library', 'Saved Application State', '{BUNDLE_ID}.savedState'], personal: false },
+  { parts: ['Library', 'WebKit', '{APP_NAME}'], personal: false },
+  { parts: ['Library', 'WebKit', '{BUNDLE_ID}'], personal: false },
+  { parts: ['Library', 'HTTPStorages', '{BUNDLE_ID}'], personal: false },
+  { parts: ['Library', 'HTTPStorages', '{BUNDLE_ID}.binarycookies'], personal: false },
+  // A login agent left behind would point at an app that is gone.
+  { parts: ['Library', 'LaunchAgents', '{BUNDLE_ID}.plist'], personal: false },
+  { parts: ['Library', 'LaunchAgents', '{BUNDLE_ID}.*.plist'], personal: false },
 ];
 
 /**
@@ -105,23 +127,24 @@ export async function findRelatedPaths(
   appName: string,
   bundleId: string | null,
   home = homedir()
-): Promise<string[]> {
-  const paths: string[] = [];
+): Promise<Array<{ path: string; personal: boolean }>> {
+  const paths: Array<{ path: string; personal: boolean }> = [];
   // The default macOS volume is case-insensitive: "Demo App" and "demo app" are
   // the same folder, and listing it twice would double its size.
   const seen = new Set<string>();
-  const add = (path: string): void => {
-    const key = path.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      paths.push(path);
-    }
-  };
 
   // Fall back to guessing if we couldn't read the bundle ID
   const id = bundleId ?? appName.toLowerCase().replace(/\s+/g, '.');
 
-  for (const parts of RELATED_PATHS_TEMPLATES) {
+  for (const { parts, personal } of RELATED_PATHS_TEMPLATES) {
+    const add = (path: string): void => {
+      const key = path.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        paths.push({ path, personal });
+      }
+    };
+
     const template = join(home, ...parts);
     const variations = [
       template.replace('{APP_NAME}', appName).replace('{BUNDLE_ID}', id),
@@ -178,8 +201,8 @@ async function describeApp(appDir: string, entry: string, home: string): Promise
     const size = await getSize(appPath);
 
     const related: RelatedPath[] = [];
-    for (const path of await findRelatedPaths(appName, bundleId, home)) {
-      related.push({ path, size: await getSize(path) });
+    for (const { path, personal } of await findRelatedPaths(appName, bundleId, home)) {
+      related.push({ path, size: await getSize(path), personal });
     }
 
     return {
@@ -238,7 +261,11 @@ export async function listInstalledApps(options: ListAppsOptions = {}): Promise<
  * Removes each app bundle and then the files related to it. An app whose bundle
  * cannot be removed keeps its related files, so nothing is left half-uninstalled.
  */
-export async function uninstallApps(apps: AppInfo[], remove: RemoveFn): Promise<UninstallResult> {
+export async function uninstallApps(
+  apps: AppInfo[],
+  remove: RemoveFn,
+  options: UninstallOptions = {}
+): Promise<UninstallResult> {
   const result: UninstallResult = { uninstalled: 0, freedSpace: 0, errors: [] };
 
   for (const app of apps) {
@@ -249,6 +276,7 @@ export async function uninstallApps(apps: AppInfo[], remove: RemoveFn): Promise<
     result.freedSpace += app.size;
 
     for (const related of app.related) {
+      if (options.keepPersonal && related.personal) continue;
       if (validatePathSafety(related.path) !== null) continue;
       if (await remove(related.path).catch(() => false)) {
         result.freedSpace += related.size;

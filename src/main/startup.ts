@@ -41,6 +41,7 @@ function run(argv) {
     const args = read('ProgramArguments');
     const keepAlive = read('KeepAlive');
     const label = read('Label');
+    const associated = [].concat(read('AssociatedBundleIdentifiers') ?? []);
     return {
       path,
       label,
@@ -49,7 +50,8 @@ function run(argv) {
       keepAlive: keepAlive && typeof keepAlive === 'object' ? Object.keys(keepAlive) : keepAlive === true,
       scheduled: read('StartInterval') != null || read('StartCalendarInterval') != null,
       disabled: read('Disabled') === true,
-      app: [].concat(read('AssociatedBundleIdentifiers') ?? [], label).map(appFor).find(Boolean),
+      bundleIds: associated.filter((id) => typeof id === 'string'),
+      app: associated.concat(label).map(appFor).find(Boolean),
     };
   }));
 }
@@ -67,6 +69,8 @@ export interface PlistReading {
   disabled?: boolean;
   /** Caminho do app que o macOS associa ao item. */
   app?: string;
+  /** Apps que o plist declara como donos, em AssociatedBundleIdentifiers. */
+  bundleIds?: string[];
   /** Só o root lê o plist. */
   unreadable?: boolean;
 }
@@ -95,6 +99,7 @@ export function parsePlistReadings(output: string): PlistReading[] {
         scheduled: entry.scheduled === true,
         disabled: entry.disabled === true,
         app: text(entry.app),
+        bundleIds: Array.isArray(entry.bundleIds) ? entry.bundleIds.filter((id) => typeof id === 'string') : [],
         unreadable: entry.unreadable === true,
       },
     ];
@@ -218,8 +223,14 @@ async function isMissing(path: string): Promise<boolean> {
   }
 }
 
-export async function listStartupItems(): Promise<StartupItemDTO[]> {
-  const files = (
+export interface StartupPlist {
+  scope: StartupScope;
+  path: string;
+}
+
+/** Os plists de terceiros nas três pastas do launchd. */
+async function startupPlists(): Promise<StartupPlist[]> {
+  return (
     await Promise.all(
       STARTUP_FOLDERS.map(async ({ scope, dir }) => {
         const names = await readdir(dir).catch(() => [] as string[]);
@@ -229,18 +240,37 @@ export async function listStartupItems(): Promise<StartupItemDTO[]> {
       })
     )
   ).flat();
+}
+
+async function readPlists(files: StartupPlist[]): Promise<Map<string, PlistReading>> {
+  if (files.length === 0) return new Map();
+  const output = await run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', PLIST_SCRIPT, ...files.map((file) => file.path)]);
+  return new Map(parsePlistReadings(output).map((reading) => [reading.path, reading]));
+}
+
+/** Cada plist de terceiros com o que ele diz, para quem precisa decidir de quem ele é. */
+export async function readStartupPlists(): Promise<Array<StartupPlist & { reading: PlistReading }>> {
+  const files = await startupPlists();
+  const readings = await readPlists(files);
+  return files.flatMap((file) => {
+    const reading = readings.get(file.path);
+    return reading ? [{ ...file, reading }] : [];
+  });
+}
+
+export async function listStartupItems(): Promise<StartupItemDTO[]> {
+  const files = await startupPlists();
   if (files.length === 0) return [];
 
   const uid = process.getuid?.() ?? 0;
-  const [plists, userDisabled, systemDisabled, userList, systemPrint] = await Promise.all([
-    run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', PLIST_SCRIPT, ...files.map((file) => file.path)]),
+  const [readings, userDisabled, systemDisabled, userList, systemPrint] = await Promise.all([
+    readPlists(files),
     run('/bin/launchctl', ['print-disabled', `gui/${uid}`]),
     run('/bin/launchctl', ['print-disabled', 'system']),
     run('/bin/launchctl', ['list']),
     run('/bin/launchctl', ['print', 'system']),
   ]);
 
-  const readings = new Map(parsePlistReadings(plists).map((reading) => [reading.path, reading]));
   const programs = [...new Set([...readings.values()].map((reading) => reading.program))].filter(
     (program): program is string => !!program && isAbsolute(program)
   );

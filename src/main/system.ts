@@ -150,11 +150,19 @@ export function runMaintenance(task: MaintenanceTask): Promise<MaintenanceResult
       (error: Error) => ({ success: false, error: error.message })
     );
   }
+  return runAsAdmin(command.script);
+}
 
+/**
+ * Roda como root pelo diálogo de senha do próprio macOS. O script vem sempre de
+ * texto fixo ou de caminhos já conferidos: nada nele precisa de escape.
+ */
+export function runAsAdmin(script: string): Promise<MaintenanceResultDTO> {
+  if (/["\\]/.test(script)) return Promise.resolve({ success: false, error: 'Unsafe command' });
   return new Promise((resolve) => {
     execFile(
       '/usr/bin/osascript',
-      ['-e', `do shell script "${command.script}" with administrator privileges`],
+      ['-e', `do shell script "${script}" with administrator privileges`],
       { timeout: 120000 },
       (error, _stdout, stderr) => {
         if (!error) resolve({ success: true });

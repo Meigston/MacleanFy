@@ -9,6 +9,7 @@ import {
   type WebContents,
 } from 'electron';
 import electronUpdater from 'electron-updater';
+import { lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { CATEGORIES, type CategoryId } from '../core/types';
@@ -26,8 +27,9 @@ import { SUPPORT, isPixOption } from '../shared/support';
 import { Engine } from './engine';
 import { HistoryStore } from './history';
 import { PerformanceMonitor } from './perf/monitor';
-import { listStartupItems } from './startup';
-import { getMaintenanceInfo, getSystemInfo, runMaintenance, setNoDsStore } from './system';
+import { listStartupItems, readStartupPlists } from './startup';
+import { removalScript, systemFilesOf, type SystemFile } from './system-files';
+import { getMaintenanceInfo, getSystemInfo, runAsAdmin, runMaintenance, setNoDsStore } from './system';
 import { Updater } from './updater';
 
 const FULL_DISK_ACCESS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
@@ -93,8 +95,9 @@ export function registerIpc(): void {
   const history = new HistoryStore(join(app.getPath('userData'), 'history.json'));
   const rendererFile = pathToFileURL(join(__dirname, '../renderer/index.html')).href;
 
-  // Apps devolvidos pela última listagem, por caminho do bundle.
+  // Apps devolvidos pela última listagem, por caminho do bundle, e o que cada um deixou em /Library.
   let knownApps = new Map<string, AppInfo>();
+  let knownSystem = new Map<string, Array<SystemFile & { size: number }>>();
   // Plists de inicialização da última listagem: só eles podem ser mostrados no Finder.
   let knownStartup = new Set<string>();
 
@@ -171,35 +174,72 @@ export function registerIpc(): void {
     const listed = apps.filter((info) => !self.startsWith(info.path + '/'));
     knownApps = new Map(listed.map((info) => [info.path, info]));
 
+    // Só arquivos comuns: um link ou uma pasta no lugar de um plist não é apagado.
+    const plists = await readStartupPlists().catch(() => []);
+    knownSystem = new Map(
+      await Promise.all(
+        listed.map(async (info) => {
+          const files = await Promise.all(
+            systemFilesOf(info, plists).map(async (file) => {
+              const stats = await lstat(file.path).catch(() => null);
+              return stats?.isFile() ? [{ ...file, size: stats.size }] : [];
+            })
+          );
+          return [info.path, files.flat()] as const;
+        })
+      )
+    );
+
     return Promise.all(
-      listed.map(async (info) => ({
-        name: info.name,
-        path: info.path,
-        size: info.size,
-        related: info.related,
-        totalSize: info.totalSize,
-        // Miniatura do Quick Look: o app.getFileIcon devolve o ícone genérico para bundles.
-        icon: await nativeImage
-          .createThumbnailFromPath(info.path, APP_ICON_SIZE)
-          .then((image) => image.toDataURL())
-          .catch(() => undefined),
-      }))
+      listed.map(async (info) => {
+        const system = (knownSystem.get(info.path) ?? []).map(({ path, size }) => ({ path, size }));
+        return {
+          name: info.name,
+          path: info.path,
+          size: info.size,
+          related: info.related,
+          system,
+          totalSize: info.totalSize + system.reduce((sum, file) => sum + file.size, 0),
+          // Miniatura do Quick Look: o app.getFileIcon devolve o ícone genérico para bundles.
+          icon: await nativeImage
+            .createThumbnailFromPath(info.path, APP_ICON_SIZE)
+            .then((image) => image.toDataURL())
+            .catch(() => undefined),
+        };
+      })
     );
   });
 
-  handle(CHANNELS.appsUninstall, async (_sender, appPaths: unknown): Promise<UninstallResultDTO> => {
+  handle(CHANNELS.appsUninstall, async (_sender, appPaths: unknown, options: unknown): Promise<UninstallResultDTO> => {
     const apps = (isStringArray(appPaths) ? appPaths : [])
       .map((path) => knownApps.get(path))
       .filter((info): info is AppInfo => info !== undefined);
+    const keepPersonal = (options as { keepPersonal?: unknown } | undefined)?.keepPersonal === true;
 
     // Desinstalar manda para a Lixeira: dá para voltar atrás até esvaziá-la.
-    const result = await uninstallApps(apps, async (path) => {
-      await shell.trashItem(path);
-      return true;
-    });
+    const result: UninstallResultDTO = await uninstallApps(
+      apps,
+      async (path) => {
+        await shell.trashItem(path);
+        return true;
+      },
+      { keepPersonal }
+    );
 
     const removed = apps.filter((info) => !result.errors.includes(info.name));
-    for (const info of removed) knownApps.delete(info.path);
+
+    // O que ficou em /Library só sai como root, e de vez: o macOS não deixa mandar para a Lixeira.
+    const system = removed.flatMap((info) => knownSystem.get(info.path) ?? []);
+    if (system.length > 0) {
+      const outcome = await runAsAdmin(removalScript(system, process.getuid?.() ?? -1));
+      result.system = outcome.success ? { removed: system.length, kept: 0 } : { removed: 0, kept: system.length };
+      if (outcome.success) result.freedSpace += system.reduce((sum, file) => sum + file.size, 0);
+    }
+
+    for (const info of removed) {
+      knownApps.delete(info.path);
+      knownSystem.delete(info.path);
+    }
 
     if (result.uninstalled > 0) {
       await history.add({
@@ -243,6 +283,9 @@ export function registerIpc(): void {
   handle(CHANNELS.reveal, (_sender, path: unknown) => {
     if (typeof path !== 'string') return;
     const isRelated = [...knownApps.values()].some((info) => info.related.some((r) => r.path === path));
-    if (engine.knows(path) || knownApps.has(path) || isRelated || knownStartup.has(path)) shell.showItemInFolder(path);
+    const isSystem = [...knownSystem.values()].some((files) => files.some((file) => file.path === path));
+    if (engine.knows(path) || knownApps.has(path) || isRelated || isSystem || knownStartup.has(path)) {
+      shell.showItemInFolder(path);
+    }
   });
 }

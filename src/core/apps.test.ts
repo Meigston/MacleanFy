@@ -45,7 +45,7 @@ describe('apps', () => {
   });
 
   it('finds related paths by app name and bundle id only', async () => {
-    const related = await findRelatedPaths('Demo App', 'com.example.demo', home);
+    const related = (await findRelatedPaths('Demo App', 'com.example.demo', home)).map((entry) => entry.path);
 
     expect(related).toContain(join(home, 'Library', 'Application Support', 'Demo App'));
     expect(related).toContain(join(home, 'Library', 'Caches', 'com.example.demo'));
@@ -54,10 +54,48 @@ describe('apps', () => {
 
   it('lists a folder once even when several name spellings reach it', async () => {
     const related = await findRelatedPaths('Demo App', 'com.example.demo', home);
-    const spellings = related.map((path) => path.toLowerCase());
+    const spellings = related.map((entry) => entry.path.toLowerCase());
 
     expect(new Set(spellings).size).toBe(related.length);
     expect(spellings.filter((path) => path.endsWith('application support/demo app'))).toHaveLength(1);
+  });
+
+  it('also finds per-host preferences, cookies and the login agent', async () => {
+    const library = join(home, 'Library');
+    await mkdir(join(library, 'Preferences', 'ByHost'), { recursive: true });
+    await writeFile(join(library, 'Preferences', 'ByHost', 'com.example.demo.0F3B2C1D-1111-2222-3333-444455556666.plist'), '');
+    await writeFile(join(library, 'Preferences', 'ByHost', 'com.example.other.0F3B2C1D-1111-2222-3333-444455556666.plist'), '');
+    await mkdir(join(library, 'HTTPStorages'), { recursive: true });
+    await writeFile(join(library, 'HTTPStorages', 'com.example.demo.binarycookies'), '');
+    await mkdir(join(library, 'LaunchAgents'), { recursive: true });
+    await writeFile(join(library, 'LaunchAgents', 'com.example.demo.plist'), '');
+    await writeFile(join(library, 'LaunchAgents', 'com.example.demo.updater.plist'), '');
+    await writeFile(join(library, 'LaunchAgents', 'com.example.demolition.plist'), '');
+
+    const related = (await findRelatedPaths('Demo App', 'com.example.demo', home)).map((entry) =>
+      entry.path.slice(library.length + 1)
+    );
+
+    expect(related).toEqual(
+      expect.arrayContaining([
+        'Preferences/ByHost/com.example.demo.0F3B2C1D-1111-2222-3333-444455556666.plist',
+        'HTTPStorages/com.example.demo.binarycookies',
+        'LaunchAgents/com.example.demo.plist',
+        'LaunchAgents/com.example.demo.updater.plist',
+      ])
+    );
+    expect(related).not.toContain('Preferences/ByHost/com.example.other.0F3B2C1D-1111-2222-3333-444455556666.plist');
+    expect(related).not.toContain('LaunchAgents/com.example.demolition.plist');
+  });
+
+  it('tells settings and documents apart from caches', async () => {
+    const related = await findRelatedPaths('Demo App', 'com.example.demo', home);
+    const personal = Object.fromEntries(related.map((entry) => [entry.path.slice(home.length + 1), entry.personal]));
+
+    expect(personal).toEqual({
+      'Library/Application Support/Demo App': true,
+      'Library/Caches/com.example.demo': false,
+    });
   });
 
   it('lists apps with sizes and reports progress', async () => {
@@ -91,6 +129,25 @@ describe('apps', () => {
     expect(result.freedSpace).toBe(app.totalSize);
     expect(removed[0]).toBe(app.path);
     expect(removed).toHaveLength(1 + app.related.length);
+  });
+
+  it('can leave settings and documents behind for a reinstall', async () => {
+    const [app] = await listInstalledApps({ appDirs: [appsDir], home });
+    const removed: string[] = [];
+
+    const result = await uninstallApps(
+      [app],
+      async (path) => {
+        removed.push(path);
+        return true;
+      },
+      { keepPersonal: true }
+    );
+
+    const kept = app.related.filter((entry) => entry.personal);
+    expect(kept.map((entry) => entry.path)).toEqual([join(home, 'Library', 'Application Support', 'Demo App')]);
+    expect(removed).toEqual([app.path, join(home, 'Library', 'Caches', 'com.example.demo')]);
+    expect(result.freedSpace).toBe(app.totalSize - kept.reduce((sum, entry) => sum + entry.size, 0));
   });
 
   it('keeps related files when the bundle itself cannot be removed', async () => {

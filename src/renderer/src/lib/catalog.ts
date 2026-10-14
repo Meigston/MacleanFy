@@ -14,6 +14,7 @@ import {
   Languages,
   Mail,
   MonitorCog,
+  PackageX,
   Rocket,
   ScrollText,
   Smartphone,
@@ -60,6 +61,7 @@ export const CATEGORY_ICONS: Record<CategoryId, LucideIcon> = {
   'node-modules': Boxes,
   duplicates: Copy,
   'launch-agents': Rocket,
+  'app-leftovers': PackageX,
 };
 
 export const ALL_CATEGORY_IDS = Object.keys(CATEGORIES) as CategoryId[];

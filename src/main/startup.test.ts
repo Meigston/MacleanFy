@@ -58,6 +58,7 @@ describe('startup items', () => {
         scheduled: false,
         disabled: false,
         app: '/Library/Application Support/Logi/agent.app',
+        bundleIds: ['com.logi.cp-dev-mgr', 7],
       },
       { path: '/Users/ana/Library/LaunchAgents/empty.plist' },
       { label: 'no path' },
@@ -73,6 +74,7 @@ describe('startup items', () => {
         scheduled: false,
         disabled: false,
         app: '/Library/Application Support/Logi/agent.app',
+        bundleIds: ['com.logi.cp-dev-mgr'],
         unreadable: false,
       },
       {
@@ -84,6 +86,7 @@ describe('startup items', () => {
         scheduled: false,
         disabled: false,
         app: undefined,
+        bundleIds: [],
         unreadable: false,
       },
       {
@@ -95,6 +98,7 @@ describe('startup items', () => {
         scheduled: false,
         disabled: false,
         app: undefined,
+        bundleIds: [],
         unreadable: false,
       },
     ]);

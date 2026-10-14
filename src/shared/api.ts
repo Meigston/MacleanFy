@@ -131,7 +131,10 @@ export interface InstalledAppDTO {
   name: string;
   path: string;
   size: number;
-  related: Array<{ path: string; size: number }>;
+  /** Na Biblioteca da conta. `personal` são configurações e documentos, que dá para manter. */
+  related: Array<{ path: string; size: number; personal: boolean }>;
+  /** Fora da conta, em /Library: jobs do launchd e ajudantes. Só saem com a senha de administrador. */
+  system: Array<{ path: string; size: number }>;
   totalSize: number;
   /** Ícone do app como data URL. */
   icon?: string;
@@ -142,11 +145,18 @@ export interface AppsProgress {
   total: number;
 }
 
+export interface UninstallOptionsDTO {
+  /** Deixa configurações e documentos para uma reinstalação. */
+  keepPersonal?: boolean;
+}
+
 export interface UninstallResultDTO {
   uninstalled: number;
   freedSpace: number;
   /** Nomes dos apps que não puderam ser removidos. */
   errors: string[];
+  /** Arquivos fora da conta: quantos saíram e quantos ficaram, se a senha foi negada ou deu erro. */
+  system?: { removed: number; kept: number };
 }
 
 export type MaintenanceTask = 'dns' | 'quicklook' | 'spotlight' | 'snapshots';
@@ -305,7 +315,7 @@ export interface MacleanFyApi {
   apps: {
     list(): Promise<InstalledAppDTO[]>;
     onProgress(listener: (progress: AppsProgress) => void): Unsubscribe;
-    uninstall(appPaths: string[]): Promise<UninstallResultDTO>;
+    uninstall(appPaths: string[], options?: UninstallOptionsDTO): Promise<UninstallResultDTO>;
   };
   performance: {
     sample(): Promise<PerformanceSample>;

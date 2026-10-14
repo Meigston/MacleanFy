@@ -8,6 +8,7 @@ import type {
   InstalledAppDTO,
   ScanResultDTO,
   SystemInfo,
+  UninstallOptionsDTO,
   UninstallResultDTO,
   UpdateState,
 } from '../../../shared/api';
@@ -83,7 +84,7 @@ interface State {
   clean(categoryIds: CategoryId[], dryRun: boolean): Promise<CleanSummaryDTO>;
   loadApps(): Promise<void>;
   toggleApp(path: string): void;
-  uninstallSelected(): Promise<UninstallResultDTO>;
+  uninstallSelected(options?: UninstallOptionsDTO): Promise<UninstallResultDTO>;
   setUpdatePrompt(open: boolean): void;
 }
 
@@ -237,8 +238,8 @@ export const useStore = create<State>((set, get) => ({
     set({ appSelection: next });
   },
 
-  async uninstallSelected() {
-    const result = await window.macleanfy.apps.uninstall([...get().appSelection]);
+  async uninstallSelected(options) {
+    const result = await window.macleanfy.apps.uninstall([...get().appSelection], options);
     await Promise.all([get().loadApps(), get().refresh()]);
     return result;
   },

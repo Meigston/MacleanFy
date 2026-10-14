@@ -20,6 +20,7 @@ describe('CATEGORIES', () => {
       'node-modules',
       'duplicates',
       'launch-agents',
+      'app-leftovers',
     ];
 
     expect(Object.keys(CATEGORIES).sort()).toEqual(expectedIds.sort());

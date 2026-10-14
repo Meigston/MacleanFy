@@ -54,19 +54,23 @@ num laço, Spotlight indexando, Mac quente, dias demais sem reiniciar — e só 
 encerrado. Embaixo, os itens em segundo plano de outros fabricantes, com quando cada um roda
 e os quebrados, que apontam para programas que não existem mais.
 
-**Limpeza.** Dezesseis categorias em cinco grupos. Cada uma traz o nível de risco, e dá para
+**Limpeza.** Dezessete categorias em cinco grupos. Cada uma traz o nível de risco, e dá para
 abrir a categoria e escolher item a item.
 
 | Grupo | Categorias |
 | --- | --- |
-| Lixo do sistema | cache de aplicativos, logs, temporários, arquivos de idioma, launch agents órfãos |
+| Lixo do sistema | cache de aplicativos, logs, temporários, arquivos de idioma, launch agents órfãos, sobras de apps removidos |
 | Desenvolvimento | caches de npm/Yarn/pnpm/pip/Gradle/Cargo/CocoaPods/Xcode, Homebrew, Docker, `node_modules` parados |
 | Armazenamento | Lixeira, downloads antigos, backups do iOS, anexos do Mail, arquivos duplicados |
 | Navegadores | cache do Chrome, Safari, Firefox e Arc |
 | Arquivos grandes | arquivos acima de 500 MB em Downloads e Documentos |
 
 **Desinstalador.** Lista os aplicativos com o tamanho do app e dos arquivos que ele deixou
-na Biblioteca, e manda tudo para a Lixeira.
+na Biblioteca — caches, preferências, dados de WebKit, cookies, estado das janelas e o agente
+de login — e manda tudo para a Lixeira. Dá para manter as configurações e os documentos, para
+reinstalar depois. Os serviços que o app instalou fora da sua conta (em `/Library/LaunchDaemons`,
+`/Library/LaunchAgents` e `/Library/PrivilegedHelperTools`) saem junto, com a senha de
+administrador; esses são apagados de vez, porque o macOS não deixa mandá-los para a Lixeira.
 
 **Manutenção.** Limpar o cache de DNS, refazer as miniaturas do Quick Look, reindexar o
 Spotlight e apagar os snapshots locais do Time Machine, que são o grosso do espaço purgável.

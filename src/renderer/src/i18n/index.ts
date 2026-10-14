@@ -7,7 +7,7 @@ import { categoryEn, categoryPt, en, groupPt, pt, type StringKey } from './strin
 export { LOCALES, type Locale } from './locale';
 
 type Vars = Record<string, string | number>;
-type PluralKey = 'item' | 'category' | 'app' | 'related' | 'snapshot' | 'autostart' | 'broken';
+type PluralKey = 'item' | 'category' | 'app' | 'related' | 'snapshot' | 'autostart' | 'broken' | 'systemfile';
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 

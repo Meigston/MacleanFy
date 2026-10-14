@@ -14,7 +14,8 @@ export type CategoryId =
   | 'large-files'
   | 'node-modules'
   | 'duplicates'
-  | 'launch-agents';
+  | 'launch-agents'
+  | 'app-leftovers';
 
 export type CategoryGroup = 'System Junk' | 'Development' | 'Storage' | 'Browsers' | 'Large Files';
 
@@ -203,6 +204,14 @@ export const CATEGORIES: Record<CategoryId, Category> = {
     description: 'Launch agents pointing to non-existent applications',
     safetyLevel: 'moderate',
     safetyNote: 'Removing launch agents will prevent applications from auto-starting. Only orphaned items (pointing to non-existent apps) are detected.',
+  },
+  'app-leftovers': {
+    id: 'app-leftovers',
+    name: 'Leftovers of Removed Apps',
+    group: 'System Junk',
+    description: 'Caches, preferences and data of apps no longer on this Mac, untouched for over 30 days',
+    safetyLevel: 'moderate',
+    safetyNote: 'Only apps macOS cannot find anywhere are listed. Reinstalling one later starts from scratch.',
   },
 };
 

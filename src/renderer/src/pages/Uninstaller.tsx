@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppWindow, ChevronDown, ChevronRight, CircleCheck, FolderOpen, RefreshCw, Search, Trash2 } from 'lucide-react';
-import type { UninstallResultDTO } from '../../../shared/api';
+import type { InstalledAppDTO, UninstallResultDTO } from '../../../shared/api';
 import { Button, Checkbox, Modal, Spinner, shortPath } from '../components/ui';
 import { useT } from '../i18n';
 import { useStore } from '../state/store';
+
+/** Quanto sai do disco: sem as configurações e os documentos, se for para mantê-los. */
+function sizeToRemove(app: InstalledAppDTO, keepPersonal: boolean): number {
+  if (!keepPersonal) return app.totalSize;
+  return app.totalSize - app.related.reduce((sum, entry) => sum + (entry.personal ? entry.size : 0), 0);
+}
 
 export function Uninstaller() {
   const tr = useT();
@@ -21,6 +27,7 @@ export function Uninstaller() {
   const [confirming, setConfirming] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<UninstallResultDTO | null>(null);
+  const [keepPersonal, setKeepPersonal] = useState(false);
 
   useEffect(() => {
     if (useStore.getState().apps === null) void loadApps();
@@ -33,17 +40,20 @@ export function Uninstaller() {
 
   const chosen = (apps ?? []).filter((app) => selected.has(app.path));
   const chosenSize = chosen.reduce((sum, app) => sum + app.totalSize, 0);
+  const chosenSystem = chosen.reduce((sum, app) => sum + app.system.length, 0);
+  const chosenHasPersonal = chosen.some((app) => app.related.some((entry) => entry.personal));
   const totalSize = (apps ?? []).reduce((sum, app) => sum + app.totalSize, 0);
 
   const closeDialog = () => {
     setConfirming(false);
     setResult(null);
+    setKeepPersonal(false);
   };
 
   const run = async () => {
     setRunning(true);
     try {
-      setResult(await uninstallSelected());
+      setResult(await uninstallSelected({ keepPersonal }));
     } finally {
       setRunning(false);
     }
@@ -134,8 +144,8 @@ export function Uninstaller() {
                       <span className="cat__text">
                         <span className="cat__name">{app.name}</span>
                         <span className="cat__desc">
-                          {app.related.length > 0
-                            ? tr.plural('related', app.related.length)
+                          {app.related.length + app.system.length > 0
+                            ? tr.plural('related', app.related.length + app.system.length)
                             : t('uninstaller.related.none')}
                         </span>
                       </span>
@@ -149,11 +159,19 @@ export function Uninstaller() {
 
                     {isOpen && (
                       <div className="cat__items">
-                        {[{ path: app.path, size: app.size }, ...app.related].map((entry, index) => (
+                        {[
+                          { path: app.path, size: app.size, tag: null },
+                          ...app.related.map((entry) => ({
+                            ...entry,
+                            tag: entry.personal ? t('uninstaller.tag.personal') : null,
+                          })),
+                          ...app.system.map((entry) => ({ ...entry, tag: t('uninstaller.tag.system') })),
+                        ].map((entry, index) => (
                           <div key={entry.path} className="item item--static">
                             <span className="item__text">
                               <span className="item__name">
                                 {index === 0 ? t('uninstaller.bundle') : entry.path.split('/').pop()}
+                                {entry.tag && <span className="item__tag">{entry.tag}</span>}
                               </span>
                               <span className="item__path">{shortPath(entry.path)}</span>
                             </span>
@@ -219,6 +237,11 @@ export function Uninstaller() {
                   {t('uninstaller.result.errors', { names: result.errors.join(', ') })}
                 </div>
               )}
+              {result.system && result.system.kept > 0 && (
+                <div className="notice notice--warning">
+                  {t('uninstaller.result.system', { count: tr.plural('systemfile', result.system.kept) })}
+                </div>
+              )}
               <div className="modal__actions">
                 <Button variant="primary" onClick={closeDialog}>
                   {t('action.done')}
@@ -238,12 +261,30 @@ export function Uninstaller() {
                   <li key={app.path} className="plan__row">
                     <span className="plan__name">{app.name}</span>
                     <span className="plan__count">
-                      {app.related.length > 0 ? tr.plural('related', app.related.length) : ''}
+                      {app.related.length + app.system.length > 0
+                        ? tr.plural('related', app.related.length + app.system.length)
+                        : ''}
                     </span>
-                    <span className="plan__size">{tr.size(app.totalSize)}</span>
+                    <span className="plan__size">{tr.size(sizeToRemove(app, keepPersonal))}</span>
                   </li>
                 ))}
               </ul>
+              {chosenHasPersonal && (
+                <div className="option">
+                  <Checkbox
+                    state={keepPersonal ? 'on' : 'off'}
+                    label={t('uninstaller.keepPersonal')}
+                    disabled={running}
+                    onChange={setKeepPersonal}
+                  />
+                  <span onClick={() => !running && setKeepPersonal(!keepPersonal)}>{t('uninstaller.keepPersonal')}</span>
+                </div>
+              )}
+              {chosenSystem > 0 && (
+                <div className="notice notice--warning">
+                  {t('uninstaller.dialog.system', { count: tr.plural('systemfile', chosenSystem) })}
+                </div>
+              )}
               <div className="modal__actions">
                 <Button disabled={running} onClick={closeDialog}>
                   {t('action.cancel')}

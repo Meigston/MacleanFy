@@ -49,7 +49,7 @@ export const pt = {
   'overview.recs': '{count} recomendações',
   'overview.recs.one': '1 recomendação',
   'rec.scan.title': 'Faça a primeira análise',
-  'rec.scan.text': 'O MacleanFy confere 16 categorias de arquivos que podem ser removidos.',
+  'rec.scan.text': 'O MacleanFy confere 17 categorias de arquivos que podem ser removidos.',
   'rec.fda.title': 'Conceda Acesso Total ao Disco',
   'rec.fda.text': 'Sem ele o macOS esconde a Lixeira, o Mail e o Safari da análise.',
   'rec.category.title': 'Libere {size} em {name}',
@@ -98,6 +98,13 @@ export const pt = {
     'O aplicativo e os arquivos relacionados vão para a Lixeira. O espaço só é liberado quando você a esvaziar.',
   'uninstaller.result': '{count} na Lixeira',
   'uninstaller.result.errors': 'Não foi possível remover: {names}',
+  'uninstaller.result.system':
+    '{count} não saíram: a senha foi cancelada ou o macOS recusou. Eles aparecem em Desempenho, nos itens em segundo plano.',
+  'uninstaller.tag.personal': 'Dados pessoais',
+  'uninstaller.tag.system': 'Fora da sua conta',
+  'uninstaller.keepPersonal': 'Manter configurações e documentos, para reinstalar depois',
+  'uninstaller.dialog.system':
+    '{count} ficam fora da sua conta, em /Library. O macOS vai pedir a senha de administrador, e eles são apagados de vez, sem passar pela Lixeira.',
 
   'perf.subtitle': 'Atualiza a cada 2 segundos. Só lê: nada é encerrado nem alterado.',
   'perf.activityMonitor': 'Abrir o Monitor de Atividade',
@@ -292,6 +299,8 @@ export const pt = {
   'plural.autostart.other': '{n} abrem sozinhos',
   'plural.broken.one': '{n} quebrado',
   'plural.broken.other': '{n} quebrados',
+  'plural.systemfile.one': '{n} arquivo do sistema',
+  'plural.systemfile.other': '{n} arquivos do sistema',
 } as const;
 
 export type StringKey = keyof typeof pt;
@@ -341,7 +350,7 @@ export const en: Record<StringKey, string> = {
   'overview.recs': '{count} recommendations',
   'overview.recs.one': '1 recommendation',
   'rec.scan.title': 'Run your first scan',
-  'rec.scan.text': 'MacleanFy checks 16 categories of files that can be removed.',
+  'rec.scan.text': 'MacleanFy checks 17 categories of files that can be removed.',
   'rec.fda.title': 'Grant Full Disk Access',
   'rec.fda.text': 'Without it macOS hides the Trash, Mail and Safari from the scan.',
   'rec.category.title': 'Free up {size} in {name}',
@@ -390,6 +399,13 @@ export const en: Record<StringKey, string> = {
     'The app and its related files go to the Trash. Space is only freed once you empty it.',
   'uninstaller.result': '{count} moved to Trash',
   'uninstaller.result.errors': 'Could not remove: {names}',
+  'uninstaller.result.system':
+    '{count} were left: the password was cancelled or macOS refused. They show up in Performance, under background items.',
+  'uninstaller.tag.personal': 'Personal data',
+  'uninstaller.tag.system': 'Outside your account',
+  'uninstaller.keepPersonal': 'Keep settings and documents, to reinstall later',
+  'uninstaller.dialog.system':
+    '{count} live outside your account, in /Library. macOS will ask for the administrator password, and they are deleted for good, without going to the Trash.',
 
   'perf.subtitle': 'Refreshes every 2 seconds. Read-only: nothing is quit or changed.',
   'perf.activityMonitor': 'Open Activity Monitor',
@@ -582,6 +598,8 @@ export const en: Record<StringKey, string> = {
   'plural.autostart.other': '{n} open on their own',
   'plural.broken.one': '{n} broken',
   'plural.broken.other': '{n} broken',
+  'plural.systemfile.one': '{n} system file',
+  'plural.systemfile.other': '{n} system files',
   'plural.related.one': '{n} related file',
   'plural.related.other': '{n} related files',
 };
@@ -675,6 +693,11 @@ export const categoryPt: Record<CategoryId, CategoryText> = {
     name: 'Launch agents órfãos',
     description: 'Launch agents que apontam para apps que não existem mais',
     note: 'Remover um launch agent impede o app de iniciar sozinho. Só entram os órfãos.',
+  },
+  'app-leftovers': {
+    name: 'Sobras de apps removidos',
+    description: 'Caches, preferências e dados de apps que não estão mais no Mac, parados há mais de 30 dias',
+    note: 'Só entram apps que o macOS não acha em lugar nenhum. Se reinstalar um deles, ele começa do zero.',
   },
 };
 
