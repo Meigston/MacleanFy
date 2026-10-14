@@ -33,6 +33,7 @@ const api: MacleanFyApi = {
     uninstall: (appPaths) => ipcRenderer.invoke(CHANNELS.appsUninstall, appPaths),
   },
   maintenance: {
+    info: () => ipcRenderer.invoke(CHANNELS.maintenanceInfo),
     run: (task) => ipcRenderer.invoke(CHANNELS.maintenanceRun, task),
   },
   updates: {

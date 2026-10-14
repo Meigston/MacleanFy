@@ -22,7 +22,7 @@
   "features.uninstall.title": "Uninstaller",
   "features.uninstall.text": "Lists each app with what it left around your Library and moves everything to the Trash.",
   "features.maintenance.title": "Maintenance",
-  "features.maintenance.text": "Flushes the DNS cache and frees purgeable space when the system is slow to give it back.",
+  "features.maintenance.text": "Flushes the DNS cache and deletes local Time Machine snapshots, most of the purgeable space.",
   "shots.clean": "Smart cleaning screen, with the categories and the risk level of each one",
   "shots.clean.caption": "Every category shows its risk level. Open one to pick item by item.",
   "safety.title": "Built not to delete what it shouldn't",

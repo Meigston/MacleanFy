@@ -101,8 +101,14 @@ export const pt = {
   'maintenance.subtitle': 'Tarefas do sistema que pedem a senha de administrador',
   'maintenance.dns.title': 'Limpar o cache de DNS',
   'maintenance.dns.text': 'Resolve nomes que ficaram presos num endereço antigo. Roda dscacheutil e reinicia o mDNSResponder.',
-  'maintenance.purgeable.title': 'Liberar espaço purgável',
-  'maintenance.purgeable.text': 'Pede ao macOS para descartar caches de disco que ele já considera dispensáveis. Roda /usr/sbin/purge.',
+  'maintenance.snapshots.title': 'Apagar snapshots locais do Time Machine',
+  'maintenance.snapshots.text':
+    'São pontos de restauração que o Time Machine guarda no próprio disco, e o grosso do espaço purgável. O macOS os apaga sozinho quando falta espaço; apagar agora libera na hora, mas esses pontos de restauração se perdem. Roda tmutil deletelocalsnapshots.',
+  'maintenance.snapshots.none': 'Nenhum snapshot local agora',
+  'maintenance.snapshots.purgeable': '{size} purgáveis no disco',
+  'maintenance.snapshots.purgeable.tip':
+    'Espaço que o macOS devolve sozinho quando precisa: snapshots, arquivos do iCloud que podem voltar para a nuvem e caches que o sistema marca como descartáveis. O Finder o conta como disponível.',
+  'maintenance.snapshots.action': 'Apagar snapshots',
   'maintenance.admin': 'Pede a senha de administrador',
   'maintenance.ok': 'Concluído',
   'maintenance.cancelled': 'Cancelado',
@@ -185,6 +191,8 @@ export const pt = {
   'plural.category.other': '{n} categorias',
   'plural.app.one': '{n} aplicativo',
   'plural.app.other': '{n} aplicativos',
+  'plural.snapshot.one': '{n} snapshot local',
+  'plural.snapshot.other': '{n} snapshots locais',
   'plural.related.one': '{n} arquivo relacionado',
   'plural.related.other': '{n} arquivos relacionados',
 } as const;
@@ -288,8 +296,14 @@ export const en: Record<StringKey, string> = {
   'maintenance.subtitle': 'System tasks that ask for the administrator password',
   'maintenance.dns.title': 'Flush the DNS cache',
   'maintenance.dns.text': 'Fixes names stuck on an old address. Runs dscacheutil and restarts mDNSResponder.',
-  'maintenance.purgeable.title': 'Free purgeable space',
-  'maintenance.purgeable.text': 'Asks macOS to drop disk caches it already considers disposable. Runs /usr/sbin/purge.',
+  'maintenance.snapshots.title': 'Delete local Time Machine snapshots',
+  'maintenance.snapshots.text':
+    'Restore points Time Machine keeps on the disk itself, and most of the purgeable space. macOS deletes them on its own when space runs low; deleting them now frees the space right away, but those restore points are lost. Runs tmutil deletelocalsnapshots.',
+  'maintenance.snapshots.none': 'No local snapshots right now',
+  'maintenance.snapshots.purgeable': '{size} purgeable on disk',
+  'maintenance.snapshots.purgeable.tip':
+    'Space macOS gives back on its own when it needs it: snapshots, iCloud files that can go back to the cloud and caches the system marks as disposable. Finder counts it as available.',
+  'maintenance.snapshots.action': 'Delete snapshots',
   'maintenance.admin': 'Asks for the administrator password',
   'maintenance.ok': 'Done',
   'maintenance.cancelled': 'Cancelled',
@@ -372,6 +386,8 @@ export const en: Record<StringKey, string> = {
   'plural.category.other': '{n} categories',
   'plural.app.one': '{n} app',
   'plural.app.other': '{n} apps',
+  'plural.snapshot.one': '{n} local snapshot',
+  'plural.snapshot.other': '{n} local snapshots',
   'plural.related.one': '{n} related file',
   'plural.related.other': '{n} related files',
 };

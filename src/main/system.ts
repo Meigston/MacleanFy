@@ -3,7 +3,8 @@ import { readdir, statfs } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { app } from 'electron';
-import type { MaintenanceResultDTO, MaintenanceTask, SystemInfo } from '../shared/api';
+import type { MaintenanceInfo, MaintenanceResultDTO, MaintenanceTask, SystemInfo } from '../shared/api';
+import { CAPACITY_SCRIPT, parseCapacity, parseLocalSnapshots, purgeableBytes } from './volume';
 
 function run(command: string, args: string[], timeout = 15000): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -85,13 +86,29 @@ export async function getSystemInfo(): Promise<SystemInfo> {
   };
 }
 
+export async function getMaintenanceInfo(): Promise<MaintenanceInfo> {
+  const [capacity, snapshots] = await Promise.all([
+    run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', CAPACITY_SCRIPT])
+      .then(parseCapacity)
+      .catch(() => null),
+    run('/usr/bin/tmutil', ['listlocalsnapshots', '/'])
+      .then(parseLocalSnapshots)
+      .catch(() => []),
+  ]);
+  return { purgeable: capacity ? purgeableBytes(capacity) : null, snapshots };
+}
+
 /**
  * Comandos fixos, por caminho absoluto. Nada vindo da interface entra na linha
  * de comando: ela só escolhe a chave.
+ *
+ * Não há `/usr/sbin/purge` aqui de propósito: apesar do nome, ele esvazia o cache
+ * de disco que fica na memória — não libera espaço nenhum, e deixa o Mac mais lento
+ * até o cache se refazer.
  */
 const MAINTENANCE_COMMANDS: Record<MaintenanceTask, string> = {
   dns: '/usr/bin/dscacheutil -flushcache && /usr/bin/killall -HUP mDNSResponder',
-  purgeable: '/usr/sbin/purge',
+  snapshots: '/usr/bin/tmutil deletelocalsnapshots /',
 };
 
 /**

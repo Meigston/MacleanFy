@@ -991,6 +991,15 @@
   font-size: 13px;
 }
 
+.task__detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+
 .task__meta {
   display: inline-flex;
   align-items: center;

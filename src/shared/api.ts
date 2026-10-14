@@ -21,6 +21,7 @@ export const CHANNELS = {
   appsProgress: 'apps:progress',
   appsUninstall: 'apps:uninstall',
   maintenanceRun: 'maintenance:run',
+  maintenanceInfo: 'maintenance:info',
   openFullDiskAccess: 'shell:full-disk-access',
   openExternal: 'shell:open-external',
   reveal: 'shell:reveal',
@@ -143,7 +144,15 @@ export interface UninstallResultDTO {
   errors: string[];
 }
 
-export type MaintenanceTask = 'dns' | 'purgeable';
+export type MaintenanceTask = 'dns' | 'snapshots';
+
+/** O que a tela de manutenção mostra antes de qualquer tarefa rodar. */
+export interface MaintenanceInfo {
+  /** Bytes que o macOS libera sozinho quando precisa; nulo quando não deu para medir. */
+  purgeable: number | null;
+  /** Datas dos snapshots locais do Time Machine no disco de inicialização. */
+  snapshots: string[];
+}
 
 export interface MaintenanceResultDTO {
   success: boolean;
@@ -196,6 +205,7 @@ export interface MacleanFyApi {
     uninstall(appPaths: string[]): Promise<UninstallResultDTO>;
   };
   maintenance: {
+    info(): Promise<MaintenanceInfo>;
     run(task: MaintenanceTask): Promise<MaintenanceResultDTO>;
   };
   updates: {

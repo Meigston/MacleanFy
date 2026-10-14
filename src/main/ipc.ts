@@ -25,7 +25,7 @@ import {
 import { SUPPORT, isPixOption } from '../shared/support';
 import { Engine } from './engine';
 import { HistoryStore } from './history';
-import { getSystemInfo, runMaintenance } from './system';
+import { getMaintenanceInfo, getSystemInfo, runMaintenance } from './system';
 import { Updater } from './updater';
 
 const FULL_DISK_ACCESS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
@@ -205,6 +205,7 @@ export function registerIpc(): void {
     return result;
   });
 
+  handle(CHANNELS.maintenanceInfo, () => getMaintenanceInfo());
   handle(CHANNELS.maintenanceRun, (_sender, task: MaintenanceTask) => runMaintenance(task));
 
   handle(CHANNELS.openFullDiskAccess, () => shell.openExternal(FULL_DISK_ACCESS_URL));

@@ -60,7 +60,8 @@ open a category to pick item by item.
 **Uninstaller.** Lists applications with the size of the app and of the files it left in
 your Library, and moves everything to the Trash.
 
-**Maintenance.** Flush the DNS cache and free purgeable space.
+**Maintenance.** Flush the DNS cache and delete local Time Machine snapshots, most of the
+purgeable space.
 
 **Updates.** The app checks the project's releases on GitHub when it opens and once a day,
 without sending any of your data. When there is a new version it tells you; it only

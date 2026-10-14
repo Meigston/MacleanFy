@@ -61,7 +61,8 @@ abrir a categoria e escolher item a item.
 **Desinstalador.** Lista os aplicativos com o tamanho do app e dos arquivos que ele deixou
 na Biblioteca, e manda tudo para a Lixeira.
 
-**Manutenção.** Limpar o cache de DNS e liberar espaço purgável.
+**Manutenção.** Limpar o cache de DNS e apagar os snapshots locais do Time Machine, que são
+o grosso do espaço purgável.
 
 **Atualizações.** O app consulta as versões do projeto no GitHub ao abrir e uma vez por dia,
 sem mandar dados seus. Quando há versão nova ele avisa; só baixa se você pedir, e instala

@@ -22,7 +22,7 @@
   "features.uninstall.title": "Desinstalador",
   "features.uninstall.text": "Lista cada app com o que ele deixou espalhado na Biblioteca e manda tudo para a Lixeira.",
   "features.maintenance.title": "Manutenção",
-  "features.maintenance.text": "Limpa o cache de DNS e libera o espaço purgável quando o sistema demora a devolver.",
+  "features.maintenance.text": "Limpa o cache de DNS e apaga os snapshots locais do Time Machine, o grosso do espaço purgável.",
   "shots.clean": "Tela Limpeza inteligente, com as categorias e o nível de risco de cada uma",
   "shots.clean.caption": "Cada categoria mostra o nível de risco. Dá para abrir e escolher item por item.",
   "safety.title": "Feito para não apagar o que não devia",
