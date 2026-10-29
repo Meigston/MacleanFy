@@ -1,0 +1,76 @@
+{
+  "tempo": {
+    "fps": 30,
+    "antes": 0.25,
+    "depois": 0.45,
+    "minimo": 2.4
+  },
+  "voz": {
+    "nome": "Erica",
+    "id": "1c50764e-da13-4735-82aa-c2c9a556f5ec"
+  },
+  "musica": {
+    "nome": "Vivaldi: The Four Seasons, Summer: III. Presto — Odyssey Orchestra",
+    "id": "3dd2a7c0-7363-428b-918f-bb729286fba8"
+  },
+  "idiomas": {
+    "pt": "pt-BR",
+    "en": "en"
+  },
+  "pronuncia": {
+    "pt": { "17": "dezessete" },
+    "en": {}
+  },
+  "horizontal": {
+    "cenas": ["abertura", "pergunta", "visao-geral", "limpeza", "seguranca", "disco", "desinstalador", "desempenho", "manutencao", "final"],
+    "extra": { "abertura": 0.6, "pergunta": 0.4, "final": 2.2 },
+    "falas": {
+      "pt": [
+        "Disco cheio. Mac lento. E o limpador ainda cobra assinatura.",
+        "E se limpar o seu Mac fosse grátis, e de código aberto? Isso é o MacleanFy.",
+        "Numa tela só, a saúde do Mac, o espaço que dá para recuperar e o que você já liberou.",
+        "A limpeza inteligente varre 17 categorias: caches, logs, sobras de desenvolvimento, navegadores e duplicados.",
+        "Só o que é seguro vem marcado, e nada sai do disco sem você confirmar.",
+        "Descubra para onde foi o espaço, pasta por pasta, e mande para a Lixeira o que não serve mais.",
+        "O desinstalador remove o app junto com as sobras na Biblioteca e os serviços que ele instalou no sistema.",
+        "Mac lento? Veja processador, memória, rede e bateria ao vivo, e o que está pesando.",
+        "E a manutenção que pedia Terminal agora é um botão.",
+        "MacleanFy. Grátis e de código aberto. Gostou? Acesse o GitHub e deixe uma estrela para ajudar o projeto."
+      ],
+      "en": [
+        "Disk full. Mac slow. And the cleaner wants a subscription.",
+        "What if cleaning your Mac were free, and open source? This is MacleanFy.",
+        "One screen shows your Mac's health, the space you can reclaim and what you've already freed.",
+        "Smart clean sweeps 17 categories: caches, logs, developer leftovers, browsers and duplicates.",
+        "Only what's safe comes ticked, and nothing leaves your disk until you confirm.",
+        "Find out where your space went, folder by folder, and send what you don't need to the Trash.",
+        "The uninstaller removes an app along with its Library leftovers and the services it installed.",
+        "Mac slow? See processor, memory, network and battery live, and what's weighing it down.",
+        "And maintenance that used to need Terminal is now one button.",
+        "MacleanFy. Free and open source. Like it? Head to GitHub and leave a star to support the project."
+      ]
+    }
+  },
+  "vertical": {
+    "cenas": ["gancho", "limpeza", "disco", "desinstalador", "desempenho", "final"],
+    "extra": { "gancho": 0.3, "final": 1.6 },
+    "falas": {
+      "pt": [
+        "Mac sem espaço?",
+        "O MacleanFy limpa 17 categorias, e só o seguro vem marcado.",
+        "Veja para onde foi o espaço, pasta por pasta.",
+        "Desinstale apps junto com as sobras.",
+        "E descubra o que deixa o Mac lento.",
+        "Grátis e de código aberto. Gostou? Deixe uma estrela no GitHub!"
+      ],
+      "en": [
+        "Mac out of space?",
+        "MacleanFy cleans 17 categories, and only what's safe comes ticked.",
+        "See where your space went, folder by folder.",
+        "Uninstall apps, leftovers and all.",
+        "And find out what's slowing your Mac down.",
+        "Free and open source. Like it? Leave a star on GitHub!"
+      ]
+    }
+  }
+}

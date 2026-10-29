@@ -1,0 +1,39 @@
+# Narração: Epidemic Sound, GenerateVoiceover, voz Erica (1c50764e-da13-4735-82aa-c2c9a556f5ec),
+# languageCode pt-BR ou en, texto de `node scripts/falas.mjs <formato>`. Gerada em 27/10/2026.
+horizontal-pt-01 f48d7110-3448-4129-83ee-8f554dcf3377
+horizontal-pt-02 bc7796ec-0c08-4937-8853-7713258971a7
+horizontal-pt-03 1627f930-15b7-4944-a78d-09a3b907e076
+horizontal-pt-04 01e0a8bc-3e80-4d48-b0d3-3012e75b4da0
+horizontal-pt-05 e312000c-c925-455f-bbd2-b699a99b77b2
+horizontal-pt-06 cbaa962b-3245-4cd9-80aa-7ee421b13f94
+horizontal-pt-07 dae1bf5f-874d-40a7-bcbc-bc49bb7efc54
+horizontal-pt-08 aa0405da-e766-4f91-bb51-bbd98c2c5442
+horizontal-pt-09 1eef2ee2-595f-4e75-a2ab-5ab26102dd28
+horizontal-pt-10 252c4b86-7ece-4fcd-81ea-bde2aa9fee8d
+horizontal-en-01 65f3c384-e1d4-4a2a-8e30-28981b0ac422
+horizontal-en-02 e487fe86-5530-436a-b759-c1d5e0b296cc
+horizontal-en-03 738164e6-4f83-48ec-a444-8cd719d4d6a2
+horizontal-en-04 e3d4159a-044f-4c48-89ef-e98cdf6dcde0
+horizontal-en-05 15004bff-13a0-411b-a56c-432028ad9292
+horizontal-en-06 6a8abfce-a5ec-4636-859c-214ae09eaec0
+horizontal-en-07 6f8c55a6-6023-4beb-bf21-830cd4ecee27
+horizontal-en-08 11dcdac5-9a4e-451a-96f4-f8f5ef2f6266
+horizontal-en-09 c69f0a64-0f1d-458d-9d45-f953ff9ad074
+horizontal-en-10 47930b45-c838-446b-ad2c-1a3d3d6d5db7
+vertical-pt-01 00b33847-442a-4952-8b66-7b2b497a3fff
+vertical-pt-02 35b8fd9e-1363-47a0-a436-0c812193970b
+vertical-pt-03 8a30d9f7-7f5f-4b29-a20d-5d2a19e3e28a
+vertical-pt-04 7cf25e39-b7a2-4fc1-bd67-1c0ac34575ec
+vertical-pt-05 652c6dc0-5a99-4916-87fc-ee021a598dfd
+vertical-pt-06 3eebd45e-4b75-44d8-b721-9aed342270e9
+vertical-en-01 55480651-a687-44c3-8d72-01be5daf30f3
+vertical-en-02 0a9bed83-810c-46b3-869d-37d208e7e5e6
+vertical-en-03 b322a5d3-9335-42a1-9655-0b23aff5a58d
+vertical-en-04 b186a606-ccdf-45a1-8750-f6e6fe5b8578
+vertical-en-05 5d29cc87-0eb5-4bf5-a7fc-14dc6db5576b
+vertical-en-06 a03c8159-0236-4997-b326-e6511f73504d
+# Música: Epidemic Sound, EditRecording de 3dd2a7c0-7363-428b-918f-bb729286fba8 (Vivaldi, Verão, Presto),
+# forceDuration, MP3: horizontal-pt 68067 ms (job 0bc24aa0-607c-4500-b2b2-df88967fe50d),
+# horizontal-en 65367 ms (job fa956722-fa2d-4228-a39d-85b391514df0),
+# vertical-pt 25067 ms (job e90732d7-6a5d-4700-9de9-efdc2e00499b), vertical-en 25033 ms (job 6bbd4823-e356-41fb-a55d-98591cf0f07c).
+# As seis falas acima com id novo foram refeitas depois da revisão (saúde do Mac; sobras do desinstalador).

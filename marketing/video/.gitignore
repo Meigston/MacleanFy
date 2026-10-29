@@ -1,0 +1,6 @@
+node_modules/
+# Mídia: gravações das telas, narração e música (do Epidemic Sound) ficam fora
+# do repositório. O LEIAME diz de onde vem cada uma.
+public/
+saida/
+src/manifesto.json
