@@ -2023,7 +2023,8 @@
   margin: 2px 0 12px;
 }
 
-/* Frio é o que pode sair; quente, o que está em uso há pouco; em uso, o que não se toca. */
+/* Frio é o que passou dos dias sem uso, preso ou não (o que pode sair é o "Dá para liberar");
+ * quente, o que foi usado há pouco; em uso, o que não se toca agora. */
 .ai__fill--cold {
   background: var(--accent-400);
 }

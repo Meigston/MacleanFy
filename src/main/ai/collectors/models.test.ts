@@ -1,10 +1,32 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { chmod, lutimes, mkdir, symlink, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { chmod, lstat, lutimes, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { run as runProgram } from '../context';
+import { measure } from '../measure';
 import { AiScanner } from '../scanner';
 import { DAY, NOW, fakeContext, put, sandbox, type FakeOptions } from '../testing';
-import type { AiContext, Collector, Found, ProcessInfo } from '../types';
-import { modelCollectors, ollamaCollector, ollamaName } from './models';
+import type { AiContext, Collector, ExecResult, Found, ProcessInfo } from '../types';
+import { LSOF_BATCH, modelCollectors, ollamaCollector, ollamaName } from './models';
+
+const LSOF = '/usr/sbin/lsof';
+
+/** Um lsof de mentira em que os arquivos de `held` estão abertos pelo PID 4242; anota cada chamada. */
+function lsofWith(held: readonly string[], calls: string[][] = []): NonNullable<FakeOptions['exec']> {
+  return async (file: string, args: string[]): Promise<ExecResult> => {
+    if (file !== LSOF) return { code: 127, stdout: '', stderr: 'not faked' };
+    calls.push(args);
+    const names = args.slice(args.indexOf('--') + 1);
+    const open = names.filter((name) => held.includes(name));
+    const lines = await Promise.all(open.map(async (name) => `f3\ni${(await lstat(name, { bigint: true })).ino}`));
+    // Como o de verdade: sai com 1 se algum dos nomes não está aberto.
+    return { code: open.length === names.length ? 0 : 1, stdout: open.length ? `p4242\n${lines.join('\n')}\n` : '', stderr: '' };
+  };
+}
+
+/** Um lsof que responde sempre a mesma coisa. */
+const lsofSays = (result: ExecResult): NonNullable<FakeOptions['exec']> => (file) =>
+  file === LSOF ? result : { code: 127, stdout: '', stderr: 'not faked' };
 
 describe('model collectors', () => {
   let box: Awaited<ReturnType<typeof sandbox>>;
@@ -17,7 +39,18 @@ describe('model collectors', () => {
     await box.cleanup();
   });
 
-  const ctxFor = (extra: Partial<FakeOptions> = {}) => fakeContext({ ...box, ...extra });
+  // Por padrão ninguém tem peso nenhum aberto.
+  const ctxFor = (extra: Partial<FakeOptions> = {}) => fakeContext({ ...box, exec: lsofWith([]), ...extra });
+  /** Anota cada caminho medido, para provar que uma pasta nem foi lida. */
+  const spied = (extra: Partial<FakeOptions> = {}) => {
+    const ctx = ctxFor(extra);
+    const measured: string[] = [];
+    ctx.measure = (path) => {
+      measured.push(path);
+      return measure(path);
+    };
+    return { ctx, measured };
+  };
   const byId = (id: string): Collector => modelCollectors.find((c) => c.id === id)!;
   const run = async (id: string, ctx: AiContext = ctxFor()) => clean(await byId(id).collect(ctx));
   const find = (items: Found[], label: string) => items.find((i) => i.label === label)!;
@@ -114,7 +147,8 @@ describe('model collectors', () => {
 
       for (const item of items) {
         expect(item).toMatchObject({ kind: 'model', safety: 'moderate', removal: 'trash' });
-        expect(['redownload', 'never-loaded']).toContain(item.hint);
+        // O LM Studio não baixa sozinho: a única dica é a de nunca carregado.
+        expect([undefined, 'never-loaded']).toContain(item.hint);
         expect(item.blocked).toBeUndefined();
       }
       expect(items.some((i) => /\.internal|settings\.json|conversations|hub\//.test(i.path))).toBe(false);
@@ -183,6 +217,66 @@ describe('model collectors', () => {
       expect(first.blocked).toBeUndefined();
       expect(await first.recheck!(ctxFor({ processes: [app] }))).toBe('app-open');
       expect(await first.recheck!(ctxFor())).toBeNull();
+    });
+
+    it('takes only folders with GGUF or safetensors weights from a shared downloadsFolder', async () => {
+      const shared = join(box.home, 'workspaces');
+      await json(join(lms(), 'settings.json'), { downloadsFolder: shared });
+      await put(join(shared, 'ComfyUI/output/image_0001.png'), 3000, 60);
+      await put(join(shared, 'acme/app/package.json'), 2000, 60);
+      await put(join(shared, 'acme/app/dump.bin'), 2000, 60);
+      await put(join(shared, 'acme/nested/sub/model.gguf'), 2000, 60);
+      await put(join(shared, 'unsloth/Qwen3-GGUF/Qwen3-Q4_K_M.gguf'), 4000, 60);
+      await put(join(shared, 'mlx-community/Llama-4bit/config.json'), 100, 60);
+      await put(join(shared, 'mlx-community/Llama-4bit/model.safetensors'), 3000, 60);
+
+      expect(labels(await run('lm-studio'))).toEqual(['mlx-community/Llama-4bit', 'unsloth/Qwen3-GGUF']);
+    });
+
+    it('never reads a downloadsFolder or home pointer in a protected folder or on another disk', async () => {
+      const elsewhere = [
+        join(box.home, 'Documents/models'),
+        join(box.home, 'Downloads/lmstudio'),
+        join(box.home, 'Desktop/models'),
+        join(box.home, 'Library/CloudStorage/GoogleDrive-pessoa/models'),
+        join(box.home, 'Library/Mobile Documents/com~apple~CloudDocs/models'),
+        join(box.root, 'Volumes/T7/models'),
+      ];
+      for (const folder of elsewhere) {
+        await put(join(folder, 'bartowski/Llama-3-GGUF/llama.gguf'), 1000, 10);
+        await json(join(lms(), 'settings.json'), { downloadsFolder: folder });
+        const { ctx, measured } = spied();
+        expect(await run('lm-studio', ctx)).toEqual([]);
+        expect(measured.filter((path) => path.startsWith(folder))).toEqual([]);
+      }
+
+      // A pasta do app inteira num SSD: nem o settings.json de lá é lido.
+      const external = join(box.root, 'Volumes/T7/lmstudio');
+      await writeFile(join(box.home, '.lmstudio-home-pointer'), external);
+      await put(join(external, 'models/bartowski/Llama-3-GGUF/llama.gguf'), 1000, 10);
+      await put(join(box.home, '.cache/lm-studio/models/TheBloke/Old-GGUF/old.gguf'), 800, 400);
+      const { ctx, measured } = spied();
+      expect(await run('lm-studio', ctx)).toEqual([]);
+      expect(measured).toEqual([]);
+    });
+
+    it('holds a model whose weights another process has mapped, and checks again before removing', async () => {
+      await library();
+      const weight = join(lms(), 'models/acme/Direct-Model/weights.gguf');
+      const calls: string[][] = [];
+      const items = await run('lm-studio', ctxFor({ exec: lsofWith([weight], calls) }));
+      expect(find(items, 'acme/Direct-Model').blocked).toBe('in-use');
+      expect(find(items, 'mlx-community/Qwen3-TTS').blocked).toBeUndefined();
+      // Uma chamada só para todos os modelos, com os pesos e sem -b.
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).not.toContain('-b');
+      expect(calls[0]).toContain(join(lms(), 'models/mlx-community/Qwen3-TTS/model.safetensors'));
+
+      const free = find(await run('lm-studio'), 'acme/Direct-Model');
+      expect(free.blocked).toBeUndefined();
+      expect(await free.recheck!(ctxFor({ exec: lsofWith([weight]) }))).toBe('in-use');
+      expect(await free.recheck!(ctxFor({ exec: lsofSays({ code: 2, stdout: '', stderr: 'lsof: boom' }) }))).toBe('unverified');
+      expect(await free.recheck!(ctxFor())).toBeNull();
     });
   });
 
@@ -285,6 +379,42 @@ describe('model collectors', () => {
       expect(scan.items.map((i) => i.label).sort()).toEqual(['llama3:8b, llama3:latest', 'mistral:7b']);
       expect(scan.items.find((i) => i.label === 'mistral:7b')).toMatchObject({ blocked: 'in-use', heat: 'hot' });
     });
+
+    it('never reads OLLAMA_MODELS on another disk, nor a models folder linked there', async () => {
+      const external = join(box.root, 'Volumes/T7/ollama');
+      await library(external);
+      const bin = await binary();
+      const { ctx, measured } = spied({ env: { OLLAMA_MODELS: external } });
+      expect(await ollamaCollector([bin]).collect(ctx)).toEqual([]);
+      expect(measured).toEqual([]);
+
+      await mkdir(join(box.home, '.ollama'), { recursive: true });
+      await symlink(external, models());
+      const linked = spied();
+      expect(await ollamaCollector([bin]).collect(linked.ctx)).toEqual([]);
+      expect(linked.measured).toEqual([]);
+    });
+
+    it('holds a loaded model whose runner does not cite the blob', async () => {
+      await library();
+      const bin = await binary();
+      const server = proc(bin, `${bin} serve`);
+      // O runner só com a porta: quem diz que o modelo está carregado é o mapeamento do blob.
+      const runner = { ...proc(bin, `${bin} runner --ollama-engine --port 50123`), pid: 4343 };
+      const weight = join(models(), `blobs/sha256-${hex('e')}`);
+      const ctx = ctxFor({ processes: [server, runner], exec: lsofWith([weight]) });
+
+      const scan = await new AiScanner([ollamaCollector([bin])], async () => ctx).scan();
+      expect(scan.items.find((i) => i.label === 'mistral:7b')).toMatchObject({ blocked: 'in-use', heat: 'hot' });
+      expect(scan.items.find((i) => i.label === 'llama3:8b, llama3:latest')?.blocked).toBeUndefined();
+
+      const items = await ollamaCollector([bin]).collect(ctxFor({ processes: [server, runner] }));
+      const mistral = find(items, 'mistral:7b');
+      expect(await mistral.recheck!(ctx)).toBe('in-use');
+      expect(await mistral.recheck!(ctxFor({ processes: [server], exec: lsofSays({ code: -1, stdout: '', stderr: '' }) }))).toBe('unverified');
+      expect(await mistral.recheck!(ctxFor({ processes: [server] }))).toBeNull();
+      expect(await mistral.recheck!(ctxFor())).toBe('app-closed');
+    });
   });
 
   describe('Hugging Face', () => {
@@ -357,16 +487,97 @@ describe('model collectors', () => {
       expect(await whole.recheck!(ctxFor())).toBe('in-use');
     });
 
-    it('honors HF_HUB_CACHE and HF_HOME, and only shows a cache outside the account', async () => {
+    it('honors HF_HUB_CACHE and HF_HOME, and never reads a cache outside the account', async () => {
       await repo(join(box.home, 'hf-hub'), 'models--a--one', { x: [100, 1] });
       await repo(join(box.home, 'hf-home/hub'), 'models--b--two', { y: [100, 1] });
       await repo(join(box.tmp, 'hub'), 'models--c--three', { z: [100, 1] });
+      await put(join(box.tmp, 'xet/chunk-cache/a'), 300, 1);
 
       expect(labels(await run('hugging-face', ctxFor({ env: { HF_HUB_CACHE: join(box.home, 'hf-hub') } })))).toEqual(['a/one']);
       expect(labels(await run('hugging-face', ctxFor({ env: { HF_HOME: join(box.home, 'hf-home') } })))).toEqual(['b/two']);
-      const outside = await run('hugging-face', ctxFor({ env: { HF_HUB_CACHE: join(box.tmp, 'hub') } }));
-      expect(outside).toHaveLength(1);
-      expect(outside[0]).toMatchObject({ label: 'c/three', removal: 'none', blocked: 'via-app' });
+      for (const env of [{ HF_HUB_CACHE: join(box.tmp, 'hub') }, { HF_HOME: box.tmp }, { XDG_CACHE_HOME: box.tmp }]) {
+        const { ctx, measured } = spied({ env });
+        expect(await run('hugging-face', ctx)).toEqual([]);
+        expect(measured.filter((path) => path.startsWith(box.tmp))).toEqual([]);
+      }
+    });
+
+    it('holds a repo whose blob a live process has mapped, and checks again before removing', async () => {
+      await repo(hub(), 'models--mlx-community--whisper-large-v3-turbo', { h1: [3000, 30], h2: [500, 31] });
+      await repo(hub(), 'models--org--idle', { h3: [800, 30] });
+      const blob = join(hub(), 'models--mlx-community--whisper-large-v3-turbo/blobs/h1');
+      // O processo cita o id do repositório, não o caminho, e trabalha em outra pasta.
+      const python = { ...proc('/opt/homebrew/bin/python3', 'python3 -m mlx_whisper --model mlx-community/whisper-large-v3-turbo'), cwd: join(box.home, 'proj') };
+      const ctx = ctxFor({ processes: [python], exec: lsofWith([blob]) });
+
+      const scan = await new AiScanner([byId('hugging-face')], async () => ctx).scan();
+      expect(scan.items.find((i) => i.label === 'mlx-community/whisper-large-v3-turbo')).toMatchObject({ blocked: 'in-use', heat: 'hot' });
+      expect(scan.items.find((i) => i.label === 'org/idle')).toMatchObject({ heat: 'cold' });
+      expect(scan.items.find((i) => i.label === 'org/idle')?.blocked).toBeUndefined();
+
+      const whisper = find(await run('hugging-face'), 'mlx-community/whisper-large-v3-turbo');
+      expect(whisper.blocked).toBeUndefined();
+      expect(await whisper.recheck!(ctx)).toBe('in-use');
+      expect(await whisper.recheck!(ctxFor())).toBeNull();
+    });
+
+    it('marks a model unverified when lsof cannot answer', async () => {
+      await repo(hub(), 'models--org--whisper', { h1: [3000, 30] });
+      const label = 'org/whisper';
+      const answers: Array<[ExecResult, string | null]> = [
+        [{ code: 1, stdout: '', stderr: '' }, null],
+        [{ code: 1, stdout: '', stderr: `lsof: status error on ${hub()}/x: No such file or directory\n` }, null],
+        [{ code: 1, stdout: '', stderr: `lsof: status error on ${hub()}/x: Permission denied\n` }, 'unverified'],
+        [{ code: 1, stdout: '', stderr: `lsof: status error on ${hub()}/x: Resource temporarily unavailable\n` }, 'unverified'],
+        [{ code: 2, stdout: '', stderr: '' }, 'unverified'],
+        // Tempo esgotado: o execFile mata o lsof e não há código de saída.
+        [{ code: -1, stdout: '', stderr: '' }, 'unverified'],
+        [{ code: 127, stdout: '', stderr: 'not found' }, 'unverified'],
+        // Um processo com um arquivo cujo inode não é de nenhum dos nomes pedidos.
+        [{ code: 0, stdout: 'p4242\nf3\ni1\n', stderr: '' }, 'unverified'],
+      ];
+      for (const [answer, expected] of answers) {
+        const ctx = ctxFor({ exec: lsofSays(answer) });
+        expect(find(await run('hugging-face', ctx), label).blocked ?? null).toBe(expected);
+        expect(await find(await run('hugging-face'), label).recheck!(ctx)).toBe(expected);
+      }
+
+      // Sem a lista de processos nem pergunta ao lsof.
+      const calls: string[][] = [];
+      const unknown = ctxFor({ processesKnown: false, exec: lsofWith([], calls) });
+      expect(find(await run('hugging-face', unknown), label).blocked).toBe('unverified');
+      expect(calls).toEqual([]);
+    });
+
+    it('asks lsof in batches for a repo with many blobs', async () => {
+      const blobs: Record<string, [number, number]> = {};
+      for (let i = 0; i < LSOF_BATCH + 5; i++) blobs[`b${i}`] = [10, 30];
+      await repo(hub(), 'models--org--sharded', blobs);
+      const last = join(hub(), `models--org--sharded/blobs/b${LSOF_BATCH + 4}`);
+      const calls: string[][] = [];
+      const items = await run('hugging-face', ctxFor({ exec: lsofWith([last], calls) }));
+      expect(find(items, 'org/sharded').blocked).toBe('in-use');
+      expect(calls).toHaveLength(2);
+      for (const args of calls) expect(args.slice(args.indexOf('--') + 1).length).toBeLessThanOrEqual(LSOF_BATCH);
+    });
+
+    it.runIf(process.platform === 'darwin')('sees a blob that a real process keeps open', async () => {
+      await repo(hub(), 'models--org--whisper', { h1: [3000, 30] });
+      const blob = join(hub(), 'models--org--whisper/blobs/h1');
+      const child = spawn('/bin/sh', ['-c', 'exec 3<"$1"; exec /bin/sleep 30', 'sh', blob], { stdio: 'ignore' });
+      try {
+        const real = ctxFor({ exec: (file, args, options) => runProgram(file, args, options) });
+        // Espera o shell abrir o arquivo antes de perguntar.
+        for (let tries = 0; tries < 50; tries++) {
+          if ((await runProgram(LSOF, ['-w', '-t', '--', blob])).stdout.trim()) break;
+          await new Promise((done) => setTimeout(done, 50));
+        }
+        const whisper = find(await run('hugging-face', real), 'org/whisper');
+        expect(whisper.blocked).toBe('in-use');
+        expect(await whisper.recheck!(real)).toBe('in-use');
+      } finally {
+        child.kill();
+      }
     });
   });
 
@@ -399,18 +610,34 @@ describe('model collectors', () => {
       const items = await run('gpt4all');
       expect(labels(items)).toEqual(['Meta-Llama-3-8B-Instruct.Q4_0.gguf', 'ggml-old.bin', 'mistral-7b.Q4_0.gguf']);
       expect(find(items, 'mistral-7b.Q4_0.gguf')).toMatchObject({ junk: 'orphan', safety: 'safe', kind: 'cache' });
-      expect(find(items, 'ggml-old.bin')).toMatchObject({ kind: 'model', safety: 'moderate', hint: 'redownload' });
+      expect(find(items, 'ggml-old.bin')).toMatchObject({ kind: 'model', safety: 'moderate' });
+      expect(find(items, 'ggml-old.bin').hint).toBeUndefined();
       expect(items.some((i) => /\.chat$|\.db$/.test(i.path))).toBe(false);
 
       const open = await run('gpt4all', ctxFor({ processes: [proc('/Applications/gpt4all/bin/gpt4all.app/Contents/MacOS/gpt4all')] }));
       expect(open.every((i) => i.blocked === 'app-open')).toBe(true);
     });
 
-    it('follows the modelPath GPT4All saved in its settings', async () => {
+    const modelPath = (dir: string) => put(join(box.home, '.config/gpt4all.io/GPT4All.ini'), `[General]\nmodelPath=${dir}/\nuserDefaultModel=x\n`);
+
+    it('follows the modelPath GPT4All saved in its settings, taking only GGUF there', async () => {
       const custom = join(box.home, 'Models/gpt4all');
-      await put(join(box.home, '.config/gpt4all.io/GPT4All.ini'), `[General]\nmodelPath=${custom}/\nuserDefaultModel=x\n`);
+      await modelPath(custom);
       await put(join(custom, 'phi-3.gguf'), 900, 9);
-      expect(labels(await run('gpt4all'))).toEqual(['phi-3.gguf']);
+      await put(join(custom, 'incomplete-qwen.gguf'), 300, 9);
+      // Numa pasta comum, um .bin é de qualquer coisa.
+      await put(join(custom, 'firmware.bin'), 900, 9);
+      expect(labels(await run('gpt4all'))).toEqual(['phi-3.gguf', 'qwen.gguf']);
+    });
+
+    it('never reads a modelPath in a protected folder or on another disk', async () => {
+      for (const dir of [join(box.home, 'Downloads'), join(box.home, 'Documents/gpt4all'), join(box.root, 'Volumes/T7/gpt4all')]) {
+        await modelPath(dir);
+        await put(join(dir, 'Meta-Llama-3-8B-Instruct.Q4_0.gguf'), 3000, 50);
+        const { ctx, measured } = spied();
+        expect(await run('gpt4all', ctx)).toEqual([]);
+        expect(measured).toEqual([]);
+      }
     });
   });
 
@@ -507,6 +734,17 @@ describe('model collectors', () => {
       const ctx = ctxFor({ env: { U2NET_HOME: join(box.home, 'ai/u2net'), TORCH_HOME: '~/ai/torch' } });
       expect(labels(await run('rembg', ctx))).toEqual(['isnet.onnx']);
       expect(labels(await run('torch', ctx))).toEqual(['vit.pth']);
+    });
+
+    it('never reads U2NET_HOME, TORCH_HOME or XDG_CACHE_HOME on another disk', async () => {
+      const external = join(box.root, 'Volumes/T7');
+      await put(join(external, 'u2net/isnet.onnx'), 1000);
+      await put(join(external, 'torch/hub/checkpoints/vit.pth'), 1000);
+      await put(join(external, 'cache/whisper/large-v3.pt'), 1000);
+      const env = { U2NET_HOME: join(external, 'u2net'), TORCH_HOME: join(external, 'torch'), XDG_CACHE_HOME: join(external, 'cache') };
+      const { ctx, measured } = spied({ env });
+      for (const id of ['rembg', 'torch', 'whisper']) expect(await run(id, ctx)).toEqual([]);
+      expect(measured).toEqual([]);
     });
   });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdir, symlink } from 'node:fs/promises';
+import { lstat, mkdir, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AiScanner, refuse } from '../scanner';
 import { DAY, NOW, age, fakeContext, put, sandbox } from '../testing';
@@ -20,6 +20,7 @@ afterEach(async () => {
 const collectors = () => createOpenaiGoogleCollectors({ applications: join(box.root, 'Applications') });
 const collect = (id: string, ctx: AiContext = fakeContext(box)) => collectors().find((c) => c.id === id)!.collect(ctx);
 const pathsOf = (items: Found[]) => items.flatMap((item) => item.paths ?? [item.path]);
+const exists = (path: string) => lstat(path).then(() => true, () => false);
 const proc = (exe: string, extra: Partial<ProcessInfo> = {}): ProcessInfo => ({ pid: 4242, exe, args: exe, ...extra });
 
 const thread = (n: number) => `01a00000-0000-7000-8000-${String(n).padStart(12, '0')}`;
@@ -52,6 +53,9 @@ describe('codex', () => {
     expect(byId['/Users/ana/code/app#cold'].paths).toEqual([cold, join(c, `generated_images/${thread(1)}`)]);
     expect(byId['/Users/ana/code/app#hot'].paths).toEqual([hot, join(c, `shell_snapshots/${thread(2)}.abc.sh`)]);
     expect(byId['/Users/ana/code/app#hot'].lastUsed).toBe(NOW - 2 * DAY);
+    // Só o grupo que leva imagens avisa delas.
+    expect(byId['/Users/ana/code/app#cold'].hint).toBe('generated-images');
+    expect(byId['/Users/ana/code/app#hot'].hint).toBe('archive-first');
     // O .zst não se lê sem descomprimir: fica sem projeto, mas entra.
     expect(byId['null#cold']).toMatchObject({ count: 2, label: 'sessions' });
     expect(byId['null#cold'].paths!.sort()).toEqual([archived, zst].sort());
@@ -61,8 +65,18 @@ describe('codex', () => {
   it('keeps the images of a conversation that is gone apart, as moderate and not junk', async () => {
     await put(join(codex(), `generated_images/${thread(9)}/call_1.png`), 5000, 20);
     const [images] = (await collect('codex')).filter((i) => i.kind === 'sessions');
-    expect(images).toMatchObject({ label: 'generated_images', safety: 'moderate', count: 1 });
+    expect(images).toMatchObject({ label: 'generated_images', safety: 'moderate', count: 1, hint: 'generated-images' });
     expect(images.junk).toBeUndefined();
+  });
+
+  it('never takes the images of a conversation being compressed for orphans', async () => {
+    // A compressão escreve o .zst.tmp antes de trocar o .jsonl: a conversa continua existindo.
+    await put(join(codex(), `sessions/2026/08/01/rollout-2026-08-01T10-00-00-${thread(7)}.jsonl.zst.tmp`), 4096, 0);
+    await put(join(codex(), `archived_sessions/rollout-2026-03-30T09-32-48-${thread(6)}.jsonl.tmp`), 4096, 0);
+    await put(join(codex(), `generated_images/${thread(7)}/call_1.png`), 5000, 30);
+    await put(join(codex(), `generated_images/${thread(6)}/call_1.png`), 5000, 30);
+    const items = await collect('codex');
+    expect(pathsOf(items).some((p) => p.includes('generated_images'))).toBe(false);
   });
 
   it('blocks while the app or the CLI runs, and checks again right before removing', async () => {
@@ -258,12 +272,50 @@ describe('gemini-cli', () => {
   it('lists checkpoints and the shadow git apart, as kind checkpoints', async () => {
     const dir = await project('app');
     await put(join(dir, 'checkpoints/2026-09-01T10-00-00_000Z-file.ts-write_file.json'), 800, 20);
-    const tag = await put(join(dir, 'checkpoint-before-refactor.json'), 800, 20);
     await put(join(gemini(), 'history/app/.git/index'), 4000, 20);
 
     const [item] = await collect('gemini-cli');
-    expect(item).toMatchObject({ kind: 'checkpoints', label: 'app', project: app, count: 2, safety: 'moderate' });
-    expect(item.paths).toEqual([join(dir, 'checkpoints'), tag, join(gemini(), 'history/app')]);
+    expect(item).toMatchObject({ kind: 'checkpoints', label: 'app', project: app, count: 1, safety: 'moderate' });
+    expect(item.paths).toEqual([join(dir, 'checkpoints'), join(gemini(), 'history/app')]);
+  });
+
+  it('keeps the /chat save conversations out of the checkpoints, as sessions of their own', async () => {
+    const dir = await project('app');
+    await put(join(dir, 'checkpoints/a.json'), 800, 20);
+    await put(join(gemini(), 'history/app/.git/index'), 4000, 20);
+    const old = await put(join(dir, 'checkpoint-before-refactor.json'), 800, 20);
+    const recent = await put(join(dir, 'checkpoint-minha-conversa.json'), 800, 1);
+
+    const items = await collect('gemini-cli');
+    const checkpoints = items.find((i) => i.kind === 'checkpoints')!;
+    expect(checkpoints.paths).not.toContain(old);
+    expect(checkpoints.paths).not.toContain(recent);
+    expect(checkpoints.count).toBe(1);
+
+    const saved = items.filter((i) => i.key?.startsWith('saved-')).sort((a, b) => a.key!.localeCompare(b.key!));
+    expect(saved.map((i) => [i.key, i.kind, i.safety, i.removal, i.project, i.paths])).toEqual([
+      ['saved-cold', 'sessions', 'moderate', 'trash', app, [old]],
+      ['saved-hot', 'sessions', 'moderate', 'trash', app, [recent]],
+    ]);
+    expect(saved.find((i) => i.key === 'saved-cold')).toMatchObject({ path: old, count: 1, lastUsed: NOW - 20 * DAY });
+    expect(saved.every((i) => i.blocked === undefined)).toBe(true);
+  });
+
+  it('keeps the saved conversations while a CLI works in the project, and checks again before removing', async () => {
+    const dir = await project('app');
+    const tag = await put(join(dir, 'checkpoint-before-refactor.json'), 800, 20);
+    const cli = proc('/opt/homebrew/bin/node', { args: 'node /opt/homebrew/bin/gemini', cwd: app });
+
+    const [open] = (await collect('gemini-cli', fakeContext({ ...box, processes: [cli] }))).filter((i) => i.key === 'saved-cold');
+    expect(open.blocked).toBe('in-use');
+
+    const [closed] = (await collect('gemini-cli')).filter((i) => i.key === 'saved-cold');
+    expect(closed.blocked).toBeUndefined();
+    expect(await closed.recheck!(fakeContext(box))).toBeNull();
+    expect(await closed.recheck!(fakeContext({ ...box, processes: [cli] }))).toBe('in-use');
+    // Um /chat save com a mesma tag regravou a conversa depois da análise.
+    await age(tag, 0);
+    expect(await closed.recheck!(fakeContext(box))).toBe('in-use');
   });
 
   it('keeps the session a running CLI writes to apart and blocked', async () => {
@@ -325,14 +377,81 @@ describe('antigravity', () => {
     ]);
   });
 
+  it('keeps the obsolete versions while the app is open, and checks again before removing', async () => {
+    await installExtensions();
+    await mkdir(join(box.root, 'Applications/Antigravity.app'), { recursive: true });
+    const open = fakeContext({ ...box, processes: [proc('/Applications/Antigravity.app/Contents/MacOS/Electron')] });
+
+    const versions = (await collect('antigravity', open)).filter((i) => i.kind === 'versions');
+    expect(versions).toHaveLength(2);
+    expect(versions.every((i) => i.blocked === 'app-open')).toBe(true);
+
+    const [closed] = (await collect('antigravity')).filter((i) => i.kind === 'versions');
+    expect(closed.blocked).toBeUndefined();
+    expect(await closed.recheck!(fakeContext(box))).toBeNull();
+    expect(await closed.recheck!(open)).toBe('app-open');
+  });
+
+  /** O Spotlight responde `found` (uma linha por caminho), ou falha com `code`. */
+  const spotlight =
+    (found: string[] = [], code = 0) =>
+    (file: string, args: string[]) =>
+      file === '/usr/bin/mdfind' && args.join(' ').includes('com.google.antigravity')
+        ? { code, stdout: found.map((path) => `${path}\n`).join(''), stderr: '' }
+        : { code: 127, stdout: '', stderr: 'not faked' };
+  const gone = (extra: Partial<Parameters<typeof fakeContext>[0]> = {}) => fakeContext({ ...box, exec: spotlight(), ...extra });
+
   it('treats the active extensions as leftovers only when the app is gone', async () => {
     await installExtensions();
-    const gone = (await collect('antigravity')).find((i) => i.kind === 'leftovers');
-    expect(gone).toMatchObject({ label: 'extensions', safety: 'moderate', confidence: 'low', count: 2 });
-    expect(gone!.paths).toEqual([join(extensions(), 'golang.go-0.52.2-universal'), join(extensions(), 'redhat.java-1.54.0-darwin-arm64')]);
+    const left = (await collect('antigravity', gone())).find((i) => i.kind === 'leftovers');
+    expect(left).toMatchObject({ label: 'extensions', safety: 'moderate', confidence: 'low', count: 2 });
+    expect(left!.paths).toEqual([join(extensions(), 'golang.go-0.52.2-universal'), join(extensions(), 'redhat.java-1.54.0-darwin-arm64')]);
+
+    // O que está na Lixeira já foi desinstalado.
+    const trashed = gone({ exec: spotlight([join(box.home, '.Trash/Antigravity.app'), '/Volumes/SSD/.Trashes/501/Antigravity.app']) });
+    expect((await collect('antigravity', trashed)).some((i) => i.kind === 'leftovers')).toBe(true);
 
     await mkdir(join(box.home, 'Applications/Antigravity.app'), { recursive: true });
-    expect((await collect('antigravity')).some((i) => i.kind === 'leftovers')).toBe(false);
+    expect((await collect('antigravity', gone())).some((i) => i.kind === 'leftovers')).toBe(false);
+  });
+
+  it('keeps the active extensions when the app runs from anywhere, has another name, or nobody can tell', async () => {
+    await installExtensions();
+    const leftovers = async (ctx: AiContext) => (await collect('antigravity', ctx)).some((i) => i.kind === 'leftovers');
+
+    expect(await leftovers(gone({ processes: [proc('/Volumes/SSD/Apps/Antigravity.app/Contents/MacOS/Electron')] }))).toBe(false);
+    expect(await leftovers(gone({ exec: spotlight(['/Volumes/SSD/Apps/Google AG.app']) }))).toBe(false);
+    // Sem o Spotlight, ou passado o tempo-limite, não dá para dizer que o app sumiu.
+    expect(await leftovers(fakeContext(box))).toBe(false);
+    expect(await leftovers(gone({ exec: spotlight([], -1) }))).toBe(false);
+    // Sem a lista de processos, o app pode estar aberto de qualquer lugar.
+    expect(await leftovers(gone({ processesKnown: false }))).toBe(false);
+
+    await mkdir(join(box.root, 'Applications/Antigravity 2.app'), { recursive: true });
+    expect(await leftovers(gone())).toBe(false);
+  });
+
+  it('never trashes the leftovers once the app is back or open, checked right before removing', async () => {
+    await installExtensions();
+    const active = join(extensions(), 'redhat.java-1.54.0-darwin-arm64');
+    let ctx = gone();
+    const scanner = new AiScanner(collectors(), async () => ctx);
+    const item = (await scanner.scan()).items.find((i) => i.kind === 'leftovers')!;
+    expect(item.blocked).toBeUndefined();
+
+    for (const [now, blocked] of [
+      [gone({ processes: [proc('/Volumes/SSD/Apps/Antigravity.app/Contents/MacOS/Electron')] }), 'app-open'],
+      [gone({ exec: spotlight(['/Volumes/SSD/Apps/Antigravity.app']) }), 'current'],
+      [fakeContext(box), 'unverified'],
+    ] as const) {
+      ctx = now;
+      expect(await scanner.remove([item.id])).toMatchObject({ removed: 0, failed: [{ id: item.id, blocked }] });
+      expect(await exists(active)).toBe(true);
+    }
+
+    ctx = gone();
+    expect(await scanner.remove([item.id])).toMatchObject({ removed: 1 });
+    expect(await exists(active)).toBe(false);
   });
 
   it('offers the discarded VSIX, the caches and old logs, closed', async () => {

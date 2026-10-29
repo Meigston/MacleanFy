@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, symlink } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { AI_TOOLS } from '../../../shared/api';
 import { measure } from '../measure';
@@ -11,14 +11,41 @@ import { createEditorCollectors } from './editors';
 const VSCODE: ProcessInfo = { pid: 500, exe: '/Applications/Visual Studio Code.app/Contents/MacOS/Code', args: 'Code' };
 const RIDER: ProcessInfo = { pid: 501, exe: '/Applications/Rider.app/Contents/MacOS/rider', args: 'rider' };
 
+const FINDER = '/System/Library/CoreServices/Finder.app';
+
+async function symlinkIn(path: string, target: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await symlink(target, path);
+}
+const CURSOR_BUNDLE = 'com.todesktop.230313mzl4w4u92';
+
+/**
+ * Um Spotlight de mentira que funciona: sempre acha o Finder e acha cada app cuja chave (o id ou
+ * o nome do arquivo) a busca cita.
+ */
+function spotlight(apps: Record<string, string> = {}): NonNullable<FakeOptions['exec']> {
+  return (file, args) => {
+    if (file !== '/usr/bin/mdfind') return { code: 127, stdout: '', stderr: 'not faked' };
+    const query = args[0] ?? '';
+    const hits = Object.entries(apps)
+      .filter(([key]) => query.includes(`'${key}'`))
+      .map(([, path]) => path);
+    const probe = query.includes("'com.apple.finder'") ? [FINDER] : [];
+    return { code: 0, stdout: [...probe, ...hits].map((line) => `${line}\n`).join(''), stderr: '' };
+  };
+}
+
 describe('editor collectors', () => {
   let box: Awaited<ReturnType<typeof sandbox>>;
   let apps: string;
+  let brew: string;
 
   beforeEach(async () => {
     box = await sandbox();
     apps = join(box.root, 'Applications');
+    brew = join(box.root, 'homebrew/bin');
     await mkdir(apps, { recursive: true });
+    await mkdir(brew, { recursive: true });
   });
 
   afterEach(async () => {
@@ -28,11 +55,12 @@ describe('editor collectors', () => {
   const h = (relative: string) => join(box.home, relative);
   const support = (relative: string) => h(join('Library/Application Support', relative));
   const ctxWith = (options: Partial<FakeOptions> = {}) => fakeContext({ ...box, ...options });
+  const editorCollectors = () => createEditorCollectors({ appDirs: () => [apps], binDirs: () => [brew] });
 
   /** Junta o que os coletores com esse id acharam, como o scanner faria. */
   async function collect(id: string, options: Partial<FakeOptions> = {}, patch: Partial<AiContext> = {}): Promise<Found[]> {
     const ctx = { ...ctxWith(options), ...patch };
-    const collectors = createEditorCollectors({ appDirs: () => [apps] }).filter((collector) => collector.id === id);
+    const collectors = editorCollectors().filter((collector) => collector.id === id);
     return (await Promise.all(collectors.map((collector) => collector.collect(ctx)))).flat();
   }
 
@@ -134,9 +162,8 @@ describe('editor collectors', () => {
 
     async function sessions() {
       const app = h('code/app');
-      // O events.jsonl foi tocado ontem, mas o updated_at diz 20 dias: vale o updated_at.
-      await put(session('a', 'workspace.yaml'), yaml(app, 20), 1);
-      await put(session('a', 'events.jsonl'), 8000, 1);
+      await put(session('a', 'workspace.yaml'), yaml(app, 20), 20);
+      await put(session('a', 'events.jsonl'), 8000, 20);
       await put(session('b', 'workspace.yaml'), yaml(app, 2), 2);
       await put(session('b', 'events.jsonl'), 8000, 2);
       await put(session('c', 'workspace.yaml'), yaml(app, 40), 40);
@@ -166,6 +193,24 @@ describe('editor collectors', () => {
       // Trava de PID morto não conta.
       expect(find(found, 'sessions', 'other', 'cold')?.blocked).toBeUndefined();
       expect(found.some((item) => item.project === '/never/this')).toBe(false);
+    });
+
+    it('takes the newest of updated_at and what the session wrote since', async () => {
+      const app = h('code/app');
+      // Criada há 20 dias e usada ontem: o updated_at ficou na criação, o events.jsonl andou.
+      await put(session('a', 'workspace.yaml'), yaml(app, 20), 20);
+      await put(session('a', 'events.jsonl'), 8000, 1);
+      // O contrário: o updated_at é de ontem e os arquivos estão parados.
+      await put(session('b', 'workspace.yaml'), yaml(app, 1), 30);
+      await put(session('b', 'events.jsonl'), 8000, 30);
+      await put(session('c', 'workspace.yaml'), yaml(app, 30), 30);
+      await put(session('c', 'events.jsonl'), 8000, 30);
+
+      const found = await collect('copilot', { env: { COPILOT_HOME: root() } });
+      const hot = find(found, 'sessions', 'app', 'hot')!;
+      expect(hot.paths!.sort()).toEqual([join(root(), 'session-state/a'), join(root(), 'session-state/b')]);
+      expect(hot.lastUsed).toBeCloseTo(NOW - DAY, -3);
+      expect(find(found, 'sessions', 'app', 'cold')).toMatchObject({ count: 1, paths: [join(root(), 'session-state/c')] });
     });
 
     it('checks the locks again right before removing', async () => {
@@ -301,17 +346,34 @@ describe('editor collectors', () => {
       await put(h('.cursor/argv.json'), 500, 300);
       await put(h('.cursor/worktrees/app/1/file.ts'), 500, 300);
       await put(support('Cursor/User/globalStorage/state.vscdb'), 9000, 300);
+      await put(support('Cursor/User/settings.json'), 500, 300);
+      await put(support('Cursor/User/keybindings.json'), 500, 300);
+      await put(support('Cursor/Backups/123/file/abc'), 500, 300);
+      await put(support('Cursor/Workspaces/1/workspace.json'), 500, 300);
+      await put(support('Cursor/CachedData/abc/x.bin'), 9000, 300);
+      await put(support('Cursor/Code Cache/js/index'), 9000, 300);
+      await put(support('Cursor/logs/20251228/main.log'), 500, 300);
       await put(h('Library/Logs/Cursor/main.log'), 500, 300);
     }
 
+    /** Os restos do Cursor, com o Spotlight ligado e sem achar o app. */
+    const uninstalledCursor = (options: Partial<FakeOptions> = {}) => collect('cursor', { exec: spotlight(), ...options });
+
     it('turns what an uninstalled Cursor left into leftovers, never its configuration or worktrees', async () => {
       await cursor();
-      const found = await collect('cursor');
+      const found = await uninstalledCursor();
       expect(found.map((item) => item.label).sort()).toEqual(['.cursor/extensions', 'Library/Application Support/Cursor', 'Library/Logs/Cursor']);
       for (const item of found) expect(item).toMatchObject({ kind: 'leftovers', safety: 'moderate', removal: 'trash' });
       const paths = allPaths(found);
       expect(paths).not.toContain(h('.cursor'));
       expect(paths.some((path) => /mcp\.json|argv\.json|worktrees/.test(path))).toBe(false);
+    });
+
+    it('takes only caches and logs from the Application Support folder of an uninstalled editor', async () => {
+      await cursor();
+      const item = find(await uninstalledCursor(), 'leftovers', 'Library/Application Support/Cursor')!;
+      expect(item.paths).toEqual([support('Cursor/CachedData'), support('Cursor/Code Cache'), support('Cursor/logs')]);
+      expect(item.size).toBeGreaterThan(0);
     });
 
     it('keeps an installed Cursor to its obsolete extension versions', async () => {
@@ -320,6 +382,85 @@ describe('editor collectors', () => {
       const found = await collect('cursor');
       expect(found).toHaveLength(1);
       expect(found[0]).toMatchObject({ kind: 'versions', label: 'ms-python.python-2024.1.0', junk: 'old-version', safety: 'safe', tool: 'cursor' });
+    });
+
+    it('finds Cursor in a subfolder of the apps folder', async () => {
+      await cursor();
+      await mkdir(join(apps, 'AI/Cursor.app'), { recursive: true });
+      expect((await uninstalledCursor()).map((item) => item.kind)).toEqual(['versions']);
+    });
+
+    it('asks Spotlight for Cursor by bundle id, renamed or outside the apps folders', async () => {
+      await cursor();
+      const found = await uninstalledCursor({ exec: spotlight({ [CURSOR_BUNDLE]: '/Volumes/External/Editors/Old Editor.app' }) });
+      expect(found.map((item) => item.kind)).toEqual(['versions']);
+    });
+
+    it('does not count the copy the updater downloaded or the one in the Trash as installed', async () => {
+      await cursor();
+      const found = await uninstalledCursor({
+        exec: spotlight({
+          [CURSOR_BUNDLE]: h(`Library/Caches/${CURSOR_BUNDLE}.ShipIt/update.abc/Cursor.app`),
+          'Cursor.app': h('.Trash/Cursor.app'),
+        }),
+      });
+      expect(found.every((item) => item.kind === 'leftovers')).toBe(true);
+      expect(found.length).toBeGreaterThan(0);
+    });
+
+    it.each([
+      ['Spotlight is off', { exec: () => ({ code: 0, stdout: '', stderr: '' }) }],
+      ['Spotlight fails', { exec: () => ({ code: 1, stdout: '', stderr: 'boom' }) }],
+      ['the process list is unknown', { exec: spotlight(), processesKnown: false }],
+    ])('counts Cursor as installed when %s', async (_, options: Partial<FakeOptions>) => {
+      await cursor();
+      const found = await collect('cursor', options);
+      expect(found.some((item) => item.kind === 'leftovers')).toBe(false);
+    });
+
+    it('finds Windsurf renamed to Devin Desktop through Spotlight by name', async () => {
+      await put(h('.windsurf/extensions/a.b-1.0.0/package.json'), 9000, 300);
+      await put(support('Devin/User/settings.json'), 500, 300);
+      await put(support('Devin/logs/main.log'), 500, 300);
+      const left = await collect('windsurf', { exec: spotlight() });
+      expect(find(left, 'leftovers', 'Library/Application Support/Devin')?.paths).toEqual([support('Devin/logs')]);
+      const found = await collect('windsurf', { exec: spotlight({ 'Devin *.app': join(box.root, 'Downloads/Devin Desktop.app') }) });
+      expect(found.some((item) => item.kind === 'leftovers')).toBe(false);
+    });
+
+    describe('cursor-agent history in ~/.cursor', () => {
+      async function withChats() {
+        await cursor();
+        await put(h('.cursor/chats/abc/store.db'), 4000, 300);
+        await put(h('.cursor/projects/app/agent-transcripts/t.txt'), 4000, 300);
+      }
+      const cliPaths = (found: Found[]) => [...new Set(allPaths(found))].filter((path) => /\/\.cursor\/(chats|projects|acp-sessions|ai-tracking)/.test(path));
+
+      it.each([
+        ['linked as agent', () => symlinkIn(h('.local/bin/agent'), '../share/cursor-agent/versions/2026.10.1/cursor-agent')],
+        ['linked as cursor-agent', () => symlinkIn(h('.local/bin/cursor-agent'), '../share/cursor-agent/versions/2026.10.1/cursor-agent')],
+        ['installed by Homebrew', () => put(join(brew, 'cursor-agent'), 100)],
+        ['linked as agent by Homebrew', () => symlinkIn(join(brew, 'agent'), '../Caskroom/cursor-cli/1.0/agent')],
+        ['only in its downloaded versions', () => put(h('.local/share/cursor-agent/versions/2026.10.1/index.js'), 100)],
+      ])('never offers it when the CLI is %s', async (_, install) => {
+        await withChats();
+        await install();
+        const found = await uninstalledCursor();
+        expect(find(found, 'leftovers', '.cursor/extensions')).toBeDefined();
+        expect(cliPaths(found)).toEqual([]);
+      });
+
+      it('never offers it while the CLI runs', async () => {
+        await withChats();
+        const node = { pid: 9, exe: h('.local/share/cursor-agent/versions/2026.10.1/node'), args: 'node index.js' };
+        expect(cliPaths(await uninstalledCursor({ processes: [node] }))).toEqual([]);
+      });
+
+      it('offers it once the CLI is gone too, and an unrelated agent command does not count', async () => {
+        await withChats();
+        await symlinkIn(join(brew, 'agent'), '../Cellar/other-agent/1.0/bin/agent');
+        expect(cliPaths(await uninstalledCursor()).sort()).toEqual([h('.cursor/chats'), h('.cursor/projects')]);
+      });
     });
 
     it('counts a running Cursor as installed and blocks while it is open', async () => {
@@ -334,7 +475,7 @@ describe('editor collectors', () => {
       await put(h('.trae-aicc/config.json'), 100, 300);
       await put(h('.trae-aicc/.ripgrep/rg'), 9000, 300);
       await put(h('.trae-aicc/.code_contribution/_code_commit.db'), 9000, 300);
-      const found = await collect('trae');
+      const found = await collect('trae', { exec: spotlight() });
       const aicc = find(found, 'leftovers', '.trae-aicc')!;
       expect(aicc.paths).toEqual([h('.trae-aicc/.ripgrep'), h('.trae-aicc/.code_contribution')]);
       expect(allPaths(found).some((path) => /user_rules|config\.json/.test(path))).toBe(false);
@@ -344,7 +485,7 @@ describe('editor collectors', () => {
       const kiro = join(box.root, 'kiro-home');
       await put(join(kiro, 'extensions/a.b-1.0.0/package.json'), 9000, 300);
       await put(join(kiro, 'settings/mcp.json'), 100, 300);
-      const found = await collect('kiro', { env: { KIRO_HOME: kiro } });
+      const found = await collect('kiro', { env: { KIRO_HOME: kiro }, exec: spotlight() });
       expect(found.map((item) => item.path)).toEqual([join(kiro, 'extensions')]);
     });
 
@@ -436,6 +577,6 @@ describe('editor collectors', () => {
 
   it('finds nothing in an empty account', async () => {
     const ctx = ctxWith();
-    for (const collector of createEditorCollectors({ appDirs: () => [apps] })) expect(await collector.collect(ctx)).toEqual([]);
+    for (const collector of editorCollectors()) expect(await collector.collect(ctx)).toEqual([]);
   });
 });

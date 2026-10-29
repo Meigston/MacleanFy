@@ -152,3 +152,64 @@ describe('refuse', () => {
     expect(refuse('/Users/ana/x/../.claude', ctx)).not.toBeNull();
   });
 });
+
+describe('safety checks added after review', () => {
+  let box: Awaited<ReturnType<typeof sandbox>>;
+
+  beforeEach(async () => {
+    box = await sandbox();
+  });
+
+  afterEach(async () => {
+    await box.cleanup();
+  });
+
+  const found = (path: string, extra: Partial<Found> = {}): Found => ({
+    tool: 'cursor',
+    kind: 'leftovers',
+    label: 'x',
+    project: null,
+    path,
+    size: 1000,
+    count: 1,
+    lastUsed: NOW - 30 * DAY,
+    safety: 'moderate',
+    removal: 'trash',
+    ...extra,
+  });
+
+  it('keeps an app folder that still holds its settings out of the Trash', async () => {
+    const app = join(box.home, 'Library/Application Support/Cursor');
+    await put(join(app, 'User/settings.json'), '{}');
+    await put(join(app, 'Cache/data'), 10);
+    const ctx = fakeContext(box);
+    const s = new AiScanner([{ id: 'c', collect: async () => [found(app)] }], async () => ctx);
+    await s.scan();
+    expect((await s.remove([app])).removed).toBe(0);
+    expect(ctx.trashed).toEqual([]);
+  });
+
+  it('still lets a plain cache folder of an app go', async () => {
+    const cache = join(box.home, 'Library/Application Support/Claude/Cache');
+    await put(join(cache, 'Cache_Data/f_1'), 10);
+    const ctx = fakeContext(box);
+    const s = new AiScanner([{ id: 'c', collect: async () => [found(cache, { tool: 'claude-desktop', kind: 'cache' })] }], async () => ctx);
+    await s.scan();
+    expect((await s.remove([cache])).removed).toBe(1);
+  });
+
+  it('blocks everything when the process list could not be read', async () => {
+    const path = await put(join(box.home, '.claude/downloads/x.bin'), 10, 20);
+    const ctx = fakeContext({ ...box, processesKnown: false });
+    const s = new AiScanner([{ id: 'c', collect: async () => [found(path, { tool: 'claude-code', kind: 'cache' })] }], async () => ctx);
+    const [only] = (await s.scan()).items;
+    expect(only.blocked).toBe('unverified');
+    expect((await s.remove([path])).removed).toBe(0);
+  });
+
+  it('only treats the orchestrators’ own folders as worktrees', () => {
+    const ctx = fakeContext({ home: '/Users/ana', tmp: '/var/folders/xy/T', projects: ['/Users/ana/workspaces/acme/app'] });
+    expect(refuse('/Users/ana/workspaces/acme/app', ctx)).not.toBeNull();
+    expect(refuse('/Users/ana/workspaces', ctx)).not.toBeNull();
+  });
+});

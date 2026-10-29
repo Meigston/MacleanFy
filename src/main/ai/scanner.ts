@@ -1,4 +1,4 @@
-import { lstat } from 'node:fs/promises';
+import { lstat, readdir } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { AiBlock, AiItemDTO, AiProgress, AiRemoveResultDTO, AiScanDTO } from '../../shared/api';
 import { validatePathSafety } from '../../core/utils/fs';
@@ -56,14 +56,71 @@ const NEVER_PATTERN = /^(state|memories|goals|queue|thread_history)_\d+\.sqlite/
 /** Pastas de primeiro nível do Claude Code que guardam configuração ou estado vivo. */
 const CLAUDE_KEEP = new Set(['sessions', 'daemon', 'plugins', 'skills', 'agents', 'commands', 'backups', 'memory', 'hooks']);
 
-/** Bloqueios que dizem que o item está em uso agora: ele é quente, seja qual for a data. */
-const LIVE: ReadonlySet<AiBlock> = new Set(['in-use', 'live-session']);
+/** Bloqueios que dizem que o item está em uso agora (ou é a versão em uso): ele é quente, seja qual for a data. */
+const LIVE: ReadonlySet<AiBlock> = new Set(['in-use', 'live-session', 'current']);
 
-/** Onde os orquestradores de agentes põem as worktrees (.claude/worktrees, ~/conductor/workspaces…). */
+/**
+ * Onde os orquestradores de agentes põem as worktrees. Só os lugares exatos de cada um: uma
+ * pasta comum chamada "workspaces" com projetos dentro continua protegida.
+ */
+const WORKTREE_PLACES = [
+  /\/\.claude\/worktrees\/[^/]+$/,
+  /\/\.cursor\/worktrees\/.+$/,
+  /\/\.codex\/worktrees\/.+$/,
+  /\/conductor\/workspaces\/.+$/,
+  /\/\.conductor\/[^/]+$/,
+  /\/\.claude-squad\/worktrees\/[^/]+$/,
+  /\/vibe-kanban\/worktrees\/[^/]+$/,
+  /\/\.vibe-kanban-workspaces\/[^/]+$/,
+];
+
 export function isWorktreePath(path: string): boolean {
-  return path
-    .split('/')
-    .some((segment) => ['worktrees', 'workspaces', '.vibe-kanban-workspaces', '.conductor'].includes(segment));
+  return WORKTREE_PLACES.some((place) => place.test(path));
+}
+
+/** O que denuncia configuração ou dados de app dentro de uma pasta da Biblioteca. */
+const CONTAINED_NEVER = new Set([
+  'settings.json',
+  'keybindings.json',
+  'state.vscdb',
+  'auth.json',
+  'credentials.json',
+  '.credentials.json',
+  'oauth_creds.json',
+  'mcp.json',
+  'CLAUDE.md',
+  'AGENTS.md',
+  'sessiondata.img',
+  'id_ed25519',
+]);
+/**
+ * Níveis e entradas que a conferência olha. Vai nível por nível, então User/settings.json (no
+ * segundo) é visto antes de qualquer cache gigante do terceiro esgotar a conta.
+ */
+const CONTAINED_DEPTH = 3;
+const CONTAINED_LIMIT = 20_000;
+
+/**
+ * Pasta de app em Application Support que leva configuração junto (User/settings.json,
+ * state.vscdb com chats e tokens). Só lá: em ~/.npm ou numa extensão, um settings.json é parte
+ * de um pacote, não da pessoa.
+ */
+export async function containsSettings(path: string, ctx: AiContext): Promise<boolean> {
+  if (!path.startsWith(join(ctx.home, 'Library/Application Support') + '/')) return false;
+  let seen = 0;
+  let level = [path];
+  for (let depth = 0; depth < CONTAINED_DEPTH && level.length > 0; depth++) {
+    const next: string[] = [];
+    for (const dir of level) {
+      for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+        if (++seen > CONTAINED_LIMIT) return false;
+        if (CONTAINED_NEVER.has(entry.name)) return true;
+        if (entry.isDirectory() && entry.name !== 'node_modules') next.push(join(dir, entry.name));
+      }
+    }
+    level = next;
+  }
+  return false;
 }
 
 /** Pastas que guardam muito mais do que lixo: nem elas nem quem as contém saem. */
@@ -131,7 +188,8 @@ function protectedRoots(ctx: AiContext): string[] {
 /**
  * A última trava antes da Lixeira, para o caso de um coletor errar: só caminho absoluto dentro
  * da conta ou dos temporários dela, nunca configuração, credencial, memória, a pasta de um
- * projeto ou uma pasta que contenha qualquer uma delas.
+ * projeto ou uma pasta que contenha qualquer uma delas. O conteúdo das pastas de app em
+ * Application Support é conferido à parte, na remoção (containsSettings).
  */
 export function refuse(path: string, ctx: AiContext): string | null {
   if (!path.startsWith('/') || resolve(path) !== path) return 'not absolute';
@@ -209,7 +267,10 @@ export class AiScanner {
     );
 
     for (const item of kept) {
-      if (!item.blocked && (item.paths ?? [item.path]).some((path) => ctx.inUse(path))) item.blocked = 'in-use';
+      if (item.blocked) continue;
+      // Sem a lista de processos ninguém garante que o item está livre.
+      if (!ctx.processesKnown) item.blocked = 'unverified';
+      else if ((item.paths ?? [item.path]).some((path) => ctx.inUse(path))) item.blocked = 'in-use';
     }
 
     this.known = new Map(kept.map((item) => [idOf(item), item]));
@@ -233,9 +294,10 @@ export class AiScanner {
       path: item.path,
       size: item.size,
       count: item.count,
-      lastUsed: item.lastUsed,
+      // Relógio adiantado ou arquivo com data no futuro não deixa o item quente por dias.
+      lastUsed: Math.min(item.lastUsed, ctx.now),
       confidence: item.confidence ?? 'high',
-      heat: live ? 'hot' : item.junk || ctx.isCold(item.lastUsed) ? 'cold' : 'hot',
+      heat: live ? 'hot' : item.junk || ctx.isCold(Math.min(item.lastUsed, ctx.now)) ? 'cold' : 'hot',
       safety: item.safety,
       removal: item.removal,
     };
@@ -261,7 +323,11 @@ export class AiScanner {
         continue;
       }
       const paths = item.paths ?? [item.path];
-      const blocked = paths.some((path) => ctx.inUse(path)) ? 'in-use' : await item.recheck?.(ctx).catch(() => 'in-use' as const);
+      const blocked = !ctx.processesKnown
+        ? 'unverified'
+        : paths.some((path) => ctx.inUse(path))
+          ? 'in-use'
+          : await item.recheck?.(ctx).catch(() => 'unverified' as const);
       if (blocked) {
         result.failed.push({ id, blocked });
         continue;
@@ -271,6 +337,9 @@ export class AiScanner {
         if (item.remove) {
           await item.remove(ctx);
         } else {
+          for (const path of paths) {
+            if (await containsSettings(path, ctx)) throw new Error('refused: holds settings');
+          }
           for (const path of paths) {
             if (await lstat(path).catch(() => null)) await ctx.trash(path);
           }

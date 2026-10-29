@@ -44,6 +44,8 @@ export function createTranslator(locale: Locale): Translator {
   const numberFormat = new Intl.NumberFormat(locale);
   const dateFormat = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' });
   const relative = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  // Mês e ano sempre com número: "último uso mês passado" não se lê.
+  const counted = new Intl.RelativeTimeFormat(locale, { numeric: 'always' });
   const listFormat = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
 
   const format = (bytes: number, base: number) => {
@@ -71,12 +73,17 @@ export function createTranslator(locale: Locale): Translator {
     number: (n) => numberFormat.format(n),
     date: (ms) => dateFormat.format(ms),
     ago(ms) {
-      const seconds = Math.round((ms - Date.now()) / 1000);
+      // Data no futuro (relógio adiantado, arquivo vindo de outro Mac) vale como agora, não "em 3 dias".
+      const seconds = Math.min(0, Math.round((ms - Date.now()) / 1000));
       const abs = Math.abs(seconds);
       if (abs < 60) return relative.format(Math.trunc(seconds), 'second');
       if (abs < 3600) return relative.format(Math.trunc(seconds / 60), 'minute');
       if (abs < 86400) return relative.format(Math.trunc(seconds / 3600), 'hour');
-      return relative.format(Math.trunc(seconds / 86400), 'day');
+      // Acima de um mês, "há 900 dias" não diz nada: passa para meses e anos.
+      const days = abs / 86400;
+      if (days < 30) return relative.format(-Math.trunc(days), 'day');
+      if (days < 365) return counted.format(-Math.max(1, Math.trunc(days / 30.44)), 'month');
+      return counted.format(-Math.max(1, Math.trunc(days / 365.25)), 'year');
     },
     category(id) {
       if (locale === 'pt-BR') return categoryPt[id];

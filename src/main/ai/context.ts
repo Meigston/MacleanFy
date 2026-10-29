@@ -56,12 +56,21 @@ export function parseLsofCwd(output: string): Map<number, string> {
   return cwds;
 }
 
-export async function listProcesses(): Promise<ProcessInfo[]> {
+/** O lsof sai com 1 quando não acha nada; qualquer outro código é falha. */
+export const lsofOk = (code: number) => code === 0 || code === 1;
+
+/**
+ * Os processos vivos. `complete` é falso quando o ps ou o lsof falhou ou estourou o tempo: aí
+ * ninguém pode dizer que um caminho está livre, e o scanner não deixa nada sair.
+ */
+export async function listProcesses(): Promise<{ processes: ProcessInfo[]; complete: boolean }> {
+  // -b: não trava num volume de rede pendurado.
   const [exes, args, lsof] = await Promise.all([
     run('/bin/ps', ['-axo', 'pid=,comm=']),
     run('/bin/ps', ['-axww', '-o', 'pid=,args=']),
-    run('/usr/sbin/lsof', ['-nP', '-d', 'cwd', '-Fpn'], { timeoutMs: 15_000 }),
+    run('/usr/sbin/lsof', ['-b', '-w', '-nP', '-d', 'cwd', '-Fpn'], { timeoutMs: 15_000 }),
   ]);
+  let complete = exes.code === 0 && args.code === 0 && lsofOk(lsof.code);
   const commandLines = parsePs(args.stdout);
   const cwds = parseLsofCwd(lsof.stdout);
   const commands = parsePs(exes.stdout);
@@ -70,16 +79,63 @@ export async function listProcesses(): Promise<ProcessInfo[]> {
   // (~/.local/share/claude/versions/<v>) é o primeiro arquivo de texto que o lsof mostra.
   const bare = [...commands].filter(([, exe]) => !exe.startsWith('/')).map(([pid]) => pid);
   if (bare.length > 0) {
-    const texts = await run('/usr/sbin/lsof', ['-nP', '-a', '-p', bare.join(','), '-d', 'txt', '-Fpn'], { timeoutMs: 15_000 });
+    const texts = await run('/usr/sbin/lsof', ['-b', '-w', '-nP', '-a', '-p', bare.join(','), '-d', 'txt', '-Fpn'], { timeoutMs: 15_000 });
+    complete &&= lsofOk(texts.code);
     for (const [pid, exe] of parseLsofCwd(texts.stdout)) commands.set(pid, exe);
   }
 
-  return [...commands].map(([pid, exe]) => ({
+  const processes = [...commands].map(([pid, exe]) => ({
     pid,
     exe,
     args: commandLines.get(pid) ?? exe,
     cwd: cwds.get(pid),
   }));
+  return { processes, complete: complete && processes.length > 0 };
+}
+
+/**
+ * Onde não se lê projeto nenhum: fora da conta, discos externos e de rede, e a Biblioteca, que
+ * guarda o iCloud (Mobile Documents), o OneDrive e afins (CloudStorage) e as pastas que o
+ * macOS protege. Ler ali abre pedido de autorização ou prende a análise num volume que caiu.
+ */
+export function isReadableProject(home: string, path: string): boolean {
+  return path.startsWith(home + '/') && !path.startsWith(join(home, 'Library') + '/');
+}
+
+/** Variáveis que mudam onde as ferramentas guardam as coisas; aberto pelo Finder, o app não as herda do shell. */
+const TOOL_ENV = [
+  'CLAUDE_CONFIG_DIR',
+  'CLAUDE_CODE_TMPDIR',
+  'CODEX_HOME',
+  'CODEX_SQLITE_HOME',
+  'COPILOT_HOME',
+  'COPILOT_CACHE_HOME',
+  'GEMINI_CLI_HOME',
+  'OLLAMA_MODELS',
+  'HF_HOME',
+  'HF_HUB_CACHE',
+  'HUGGINGFACE_HUB_CACHE',
+  'HF_XET_CACHE',
+  'LLAMA_CACHE',
+  'U2NET_HOME',
+  'TORCH_HOME',
+  'XDG_CACHE_HOME',
+  'XDG_CONFIG_HOME',
+  'XDG_DATA_HOME',
+  'PLAYWRIGHT_BROWSERS_PATH',
+  'PUPPETEER_CACHE_DIR',
+];
+
+/** O que o launchd tem dessas variáveis (launchctl setenv), por cima do ambiente do próprio app. */
+export async function toolEnv(base: Readonly<Record<string, string | undefined>>): Promise<Record<string, string | undefined>> {
+  const env: Record<string, string | undefined> = { ...base };
+  await Promise.all(
+    TOOL_ENV.filter((name) => !env[name]).map(async (name) => {
+      const value = (await run('/bin/launchctl', ['getenv', name], { timeoutMs: 5_000 })).stdout.trim();
+      if (value) env[name] = value;
+    })
+  );
+  return env;
 }
 
 /** O primeiro `"cwd"` das primeiras linhas de uma transcrição, sem ler o resto dela. */
@@ -176,10 +232,12 @@ export async function discoverProjects(home: string, claudeDir: string, live: re
     }
   }
 
+  for (const path of [...found]) if (!isReadableProject(home, path)) found.delete(path);
+
   // Sessão aberta numa pasta que junta repositórios (~/Repositorios) não diz em qual deles
   // trabalhou: os repositórios filhos entram, para as worktrees deles aparecerem.
   for (const path of [...found]) {
-    if (!path.startsWith(home + '/') || (await inRepository(path, home))) continue;
+    if (await inRepository(path, home)) continue;
     for (const child of await entries(path)) {
       const repo = join(path, child.name);
       if (child.isDirectory() && (await exists(join(repo, '.git')))) found.add(repo);
@@ -211,7 +269,8 @@ export function mentions(args: string, path: string): boolean {
 
 export function isInUse(processes: readonly ProcessInfo[], path: string): boolean {
   const inside = (candidate: string | undefined) => !!candidate && (candidate === path || candidate.startsWith(path + '/'));
-  return processes.some((p) => inside(p.exe) || inside(p.cwd) || mentions(p.args, path));
+  // O includes corta quase tudo antes da RegExp: são milhares de caminhos contra centenas de processos.
+  return processes.some((p) => inside(p.exe) || inside(p.cwd) || (p.args.includes(path) && mentions(p.args, path)));
 }
 
 export async function duSize(path: string): Promise<number> {
@@ -246,9 +305,8 @@ export interface ContextOptions {
 export async function createContext(options: ContextOptions): Promise<AiContext> {
   const home = options.home ?? homedir();
   const now = options.now ?? Date.now();
-  const env = process.env;
+  const [{ processes, complete }, git, env] = await Promise.all([listProcesses(), findGit(), toolEnv(process.env)]);
   const claudeDir = env.CLAUDE_CONFIG_DIR || join(home, '.claude');
-  const [processes, git] = await Promise.all([listProcesses(), findGit()]);
   const claudeSessions = await liveClaudeSessions(claudeDir, processes);
   const projects = await discoverProjects(home, claudeDir, claudeSessions);
 
@@ -259,6 +317,7 @@ export async function createContext(options: ContextOptions): Promise<AiContext>
     now,
     env,
     processes,
+    processesKnown: complete,
     claudeSessions,
     projects,
     isCold: (ms) => ms <= 0 || now - ms > AI_COLD_DAYS * DAY,

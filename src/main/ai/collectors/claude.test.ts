@@ -167,6 +167,51 @@ describe('claude-code collector', () => {
     expect(items.find((item) => item.kind === 'sessions')).toMatchObject({ key: 'live', blocked: 'live-session' });
   });
 
+  it('checks again whether the supervisor took a listed session back through its job', async () => {
+    await put(join(folder, `${COLD}.jsonl`), header(PROJECT), 20);
+    await put(join(folder, `${COLD_TOO}.jsonl`), header(PROJECT), 25);
+    await put(join(claude, 'jobs', 'eeee5555', 'state.json'), JSON.stringify({ state: 'blocked', resumeSessionId: COLD, cwd: PROJECT }), 20);
+    await put(join(claude, 'daemon', 'roster.json'), JSON.stringify({ supervisorPid: 888, workers: [] }), 20);
+    const supervisor = { processes: [{ pid: 888, exe: 'claude', args: 'claude daemon' }] };
+
+    // Supervisor parado na análise: as duas sessões são frias e podem sair.
+    const [item] = (await collect(context())).filter((found) => found.kind === 'sessions');
+    expect(item).toMatchObject({ key: 'cold', count: 2 });
+    expect(item.blocked).toBeUndefined();
+    expect(await item.recheck!(context())).toBeNull();
+
+    // Antes do clique o supervisor voltou e retoma o job: a transcrição não pode sumir.
+    expect(await item.recheck!(context(supervisor))).toBe('live-session');
+
+    // O job terminou, mas outro, criado depois da análise, pegou a outra sessão.
+    await put(join(claude, 'jobs', 'eeee5555', 'state.json'), JSON.stringify({ state: 'done', resumeSessionId: COLD, cwd: PROJECT }), 0);
+    expect(await item.recheck!(context(supervisor))).toBeNull();
+    await put(join(claude, 'jobs', 'ffff6666', 'state.json'), JSON.stringify({ state: 'working', sessionId: COLD_TOO, cwd: PROJECT }), 0);
+    expect(await item.recheck!(context(supervisor))).toBe('live-session');
+  });
+
+  it('fails closed on every process-based check when the process list is incomplete', async () => {
+    await put(join(folder, `${COLD}.jsonl`), header(PROJECT), 20);
+    await put(join(claude, 'jobs', 'bbbb2222', 'state.json'), JSON.stringify({ state: 'done', sessionId: COLD, cwd: PROJECT }), 20);
+    await put(join(claude, 'jobs', 'bbbb2222', 'tmp', 'x.bin'), 3000, 20);
+    await put(join(claude, 'telemetry', `1p_failed_events.${OTHER}.e1.json`), 2000, 9);
+    await put(join(claude, 'shell-snapshots', `snapshot-zsh-${NOW - 10 * DAY}-abc.sh`), 2000, 10);
+    await put(join(claude, 'daemon.log'), 2000, 3);
+    const nobody = () => ({ code: 1, stdout: '', stderr: '' });
+    const unknown = context({ processesKnown: false, exec: nobody });
+    const known = context({ exec: nobody });
+
+    const items = await collect(unknown);
+    expect(items.map((item) => item.label).sort()).toEqual(['app', 'app', 'daemon.log', 'shell-snapshots', 'telemetry']);
+    for (const item of items) {
+      expect(item.blocked).toBe('unverified');
+      expect(await item.recheck!(unknown)).toBe('unverified');
+      expect(await item.recheck!(known)).toBeNull();
+    }
+    // A dúvida não transforma a sessão do job em sessão viva.
+    expect(items.find((item) => item.kind === 'sessions')!.key).toBe('cold');
+  });
+
   it('marks old native versions as junk and keeps the launcher target and the ones in use', async () => {
     const versions = join(box.home, '.local/share/claude/versions');
     for (const version of ['2.1.300', '2.1.305', '2.1.310', '2.1.312']) await put(join(versions, version), 8000, 10);
@@ -192,7 +237,26 @@ describe('claude-code collector', () => {
 
     const now = context({ exec: (_file, args) => (args.includes(join(versions, '2.1.300')) ? { code: 0, stdout: `p1\nn${join(versions, '2.1.300')}\n`, stderr: '' } : lsof(args)) });
     expect(await byLabel['2.1.300'].recheck!(now)).toBe('in-use');
-    expect(await byLabel['2.1.300'].recheck!(context())).toBeNull();
+    // O lsof sai com 1 quando ninguém está com o arquivo aberto.
+    expect(await byLabel['2.1.300'].recheck!(context({ exec: () => ({ code: 1, stdout: '', stderr: '' }) }))).toBeNull();
+  });
+
+  it('does not trust a failed or timed-out lsof, nor an incomplete process list, for the native versions', async () => {
+    const versions = join(box.home, '.local/share/claude/versions');
+    for (const version of ['2.1.300', '2.1.312']) await put(join(versions, version), 8000, 10);
+    const lsof = (code: number) => () => ({ code, stdout: '', stderr: '' });
+    const old = async (options: Partial<FakeOptions>) => (await collect(context(options))).find((item) => item.label === '2.1.300')!;
+
+    // -1 é o tempo-limite: a saída que veio não diz que ninguém usa.
+    expect(await old({ exec: lsof(-1) })).toMatchObject({ junk: 'old-version', blocked: 'unverified' });
+    expect(await old({ exec: lsof(1), processesKnown: false })).toMatchObject({ junk: 'old-version', blocked: 'unverified' });
+
+    const free = await old({ exec: lsof(1) });
+    expect(free.blocked).toBeUndefined();
+    expect(await free.recheck!(context({ exec: lsof(1) }))).toBeNull();
+    expect(await free.recheck!(context({ exec: lsof(-1) }))).toBe('unverified');
+    expect(await free.recheck!(context({ exec: lsof(2) }))).toBe('unverified');
+    expect(await free.recheck!(context({ exec: lsof(1), processesKnown: false }))).toBe('unverified');
   });
 
   it('lists the small leftovers and never configuration, credentials or tool state', async () => {
@@ -326,6 +390,19 @@ describe('claude-desktop collector', () => {
       expect(await item.recheck!(fakeContext({ ...box, processes: [OPEN] }))).toBe('app-open');
     }
     expect((await collect())[0].blocked).toBeUndefined();
+  });
+
+  it('does not take a missing app process for a closed app when the process list is incomplete', async () => {
+    await put(join(app, 'Cache/Cache_Data/f_000001'), 9000, 1);
+    await put(join(app, 'claude-code/2.1.307/claude'), 4000, 12);
+    await put(join(app, 'claude-code/2.1.309/claude'), 4000, 2);
+
+    const byLabel = Object.fromEntries((await collect({ processesKnown: false })).map((item) => [item.label, item]));
+    for (const item of [byLabel.Cache, byLabel['claude-code/2.1.307']]) {
+      expect(item.blocked).toBe('unverified');
+      expect(await item.recheck!(fakeContext({ ...box, processesKnown: false }))).toBe('unverified');
+      expect(await item.recheck!(fakeContext(box))).toBeNull();
+    }
   });
 
   it('marks the Claude Code copies that are not current as junk', async () => {

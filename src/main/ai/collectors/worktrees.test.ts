@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { lstat, mkdir, readFile, realpath, rm, stat, symlink } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { run } from '../context';
 import { AiScanner } from '../scanner';
@@ -155,6 +155,7 @@ describe('worktree collectors', () => {
     await put(join(same, '.env'), 'TOKEN=1');
     await put(join(extra, '.env.local'), 'TOKEN=2');
     await put(join(changed, '.env'), 'TOKEN=3');
+    await put(join(venv, '.env/pyvenv.cfg'), 'home = /usr/bin');
     await put(join(venv, '.env/bin/activate'), 'venv');
     await symlink(join(box.root, 'elsewhere.env'), join(linked, '.env.production'));
 
@@ -309,6 +310,215 @@ describe('worktree collectors', () => {
     const after = parseWorktreeList(await git(main, 'worktree', 'list', '--porcelain', '-z'));
     expect(after.map((w) => w.path)).toEqual([main, external]);
     expect(after[1]).toMatchObject({ prunable: true, locked: null });
+  });
+
+  it('keeps registered a worktree nested in the removed one that had already vanished', async () => {
+    const main = await repo(join(box.home, 'code/app'));
+    const done = await worktree(main, join(main, '.claude/worktrees/done'), '-b', 'done');
+    const old = await worktree(main, join(done, '.claude/worktrees/old'), '--detach');
+    await git(old, 'commit', '-q', '--allow-empty', '-m', 'only in old');
+    await rm(old, { recursive: true, force: true });
+    const ctx = context({ projects: [main] });
+
+    const scanner = new AiScanner(worktreeCollectors, async () => ctx);
+    await scanner.scan();
+    expect((await scanner.remove([done])).removed).toBe(1);
+
+    const after = parseWorktreeList(await git(main, 'worktree', 'list', '--porcelain', '-z'));
+    expect(after.map((w) => w.path)).toEqual([main, old]);
+    expect(after[1]).toMatchObject({ prunable: true, locked: null });
+  });
+
+  it('does not prune a registry nobody checked, like a working worktree whose admin lost the gitdir file', async () => {
+    const main = await repo(join(box.home, 'code/app'));
+    const keep = await worktree(main, join(box.home, 'elsewhere/keep'), '--detach');
+    await git(keep, 'commit', '-q', '--allow-empty', '-m', 'only in keep');
+    const keepAdmin = await adminOf(keep);
+    await rm(join(keepAdmin, 'gitdir'));
+    const done = await worktree(main, join(main, '.claude/worktrees/done'), '-b', 'done');
+    const ctx = context({ projects: [main] });
+
+    const scanner = new AiScanner(worktreeCollectors, async () => ctx);
+    await scanner.scan();
+    expect((await scanner.remove([done])).removed).toBe(1);
+
+    expect(ctx.trashed).toEqual([done]);
+    expect(await lstat(keepAdmin)).toBeTruthy();
+    expect(await git(keep, 'log', '-1', '--format=%s')).toBe('only in keep');
+  });
+
+  it('prunes the registry of a nested worktree that went to the Trash inside the removed one', async () => {
+    const main = await repo(join(box.home, 'code/app'));
+    await put(join(main, '.gitignore'), 'node_modules/\n.env*\n.claude/\n');
+    await git(main, 'commit', '-qam', 'ignore .claude');
+    const outer = await worktree(main, join(main, '.claude/worktrees/outer'), '-b', 'outer');
+    await worktree(main, join(outer, '.claude/worktrees/inner'), '-b', 'inner');
+    const ctx = context({ projects: [main] });
+
+    const scanner = new AiScanner(worktreeCollectors, async () => ctx);
+    const { items } = await scanner.scan();
+    expect(items.map((item) => [item.path, item.blocked])).toEqual([[outer, undefined]]);
+    expect((await scanner.remove([outer])).removed).toBe(1);
+
+    expect(await listed(main)).toEqual([main]);
+  });
+
+  it('blocks a worktree with a submodule, whose repository lives in the worktree git admin folder', async () => {
+    const lib = join(box.home, 'code/lib');
+    await mkdir(lib, { recursive: true });
+    await git(lib, 'init', '-q', '-b', 'main');
+    await put(join(lib, 'lib.txt'), 'lib');
+    await git(lib, 'add', '.');
+    await git(lib, 'commit', '-qm', 'lib');
+    const main = await repo(join(box.home, 'code/app'));
+    await git(main, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', lib, 'lib');
+    await git(main, 'commit', '-qm', 'add lib');
+    const later = await worktree(main, join(main, '.claude/worktrees/later'), '-b', 'later');
+    const hidden = await worktree(main, join(main, '.claude/worktrees/hidden'), '-b', 'hidden');
+    await worktree(main, join(main, '.claude/worktrees/plain'), '-b', 'plain');
+    // Submódulo sujo com ignore=all: o git status comum não mostra nada.
+    await git(hidden, '-c', 'protocol.file.allow=always', 'submodule', 'update', '-q', '--init');
+    await git(hidden, 'config', '--file', '.gitmodules', 'submodule.lib.ignore', 'all');
+    await git(hidden, 'commit', '-qam', 'ignore lib');
+    await put(join(hidden, 'lib/lib.txt'), 'edited');
+    const ctx = context({ projects: [main] });
+
+    const scanner = new AiScanner(worktreeCollectors, async () => ctx);
+    const { items } = await scanner.scan();
+    const blocked = Object.fromEntries(items.map((item) => [item.label, item.blocked]));
+    expect(blocked).toEqual({ later: undefined, hidden: 'submodule', plain: undefined });
+
+    // Depois da análise o agente baixa o submódulo, commita nele sem enviar e commita o gitlink.
+    await git(later, '-c', 'protocol.file.allow=always', 'submodule', 'update', '-q', '--init');
+    await git(join(later, 'lib'), 'commit', '-q', '--allow-empty', '-m', 'only in the submodule');
+    await git(later, 'commit', '-qam', 'bump lib');
+    expect(await git(later, 'status', '--porcelain')).toBe('');
+    const result = await scanner.remove([later]);
+
+    expect(result.failed).toEqual([{ id: later, blocked: 'submodule' }]);
+    expect(ctx.trashed).toEqual([]);
+    expect(await lstat(join(await adminOf(later), 'modules/lib'))).toBeTruthy();
+  });
+
+  it('looks inside whole ignored folders for secrets and render output, skipping the ones a build recreates', async () => {
+    const main = await repo(join(box.home, 'code/app'));
+    await put(join(main, '.gitignore'), 'node_modules/\n.env*\ncerts/\nout/\ndist/\ntools/\nscratch/\n*.pem\n');
+    await git(main, 'commit', '-qam', 'ignore more');
+    await put(join(main, 'certs/AuthKey_SAME.p8'), 'same key');
+    const wt = async (name: string) => worktree(main, join(main, '.claude/worktrees', name), '-b', name);
+    await put(join(await wt('keys'), 'certs/AuthKey_ABC123.p8'), 'key');
+    await put(join(await wt('dotenv'), 'certs/.env.production'), 'TOKEN=1');
+    await put(join(await wt('render'), 'out/video.mp4'), 4096);
+    await put(join(await wt('pem'), 'server.pem'), 'key');
+    await put(join(await wt('same'), 'certs/AuthKey_SAME.p8'), 'same key');
+    const builds = await wt('builds');
+    await put(join(builds, 'out/main/index.js'), 'export {}');
+    await put(join(builds, 'out/renderer/assets/icon.png'), 100);
+    await put(join(builds, 'dist/server.pem'), 'bundled');
+    await put(join(builds, 'tools/pyvenv.cfg'), 'home = /usr/bin');
+    await put(join(builds, 'tools/lib/python3.12/site-packages/secrets.py'), 'pass');
+    const huge = join(await wt('huge'), 'scratch');
+    await mkdir(huge, { recursive: true });
+    await Promise.all(Array.from({ length: 5_001 }, (_, i) => writeFile(join(huge, `f${i}.txt`), '')));
+    await put(join(await wt('deep'), 'scratch/a/b/c/d/e/f/g/h/i/j/notes.txt'), 'deep');
+
+    const items = byLabel(await collector('claude-code').collect(context({ projects: [main] })));
+    const blocked = Object.fromEntries(Object.entries(items).map(([label, item]) => [label, item.blocked]));
+
+    expect(blocked).toEqual({
+      keys: 'env-only',
+      dotenv: 'env-only',
+      render: 'ignored-work',
+      pem: 'env-only',
+      same: undefined,
+      builds: undefined,
+      huge: 'ignored-work',
+      deep: 'ignored-work',
+    });
+  });
+
+  it('blocks a worktree whose own reflog or per-worktree refs hold commits nothing else has, but not a rewritten branch', async () => {
+    const main = await repo(join(box.home, 'code/app'));
+    const left = await worktree(main, join(main, '.claude/worktrees/left'), '--detach');
+    await git(left, 'commit', '-q', '--allow-empty', '-m', 'left behind');
+    await git(left, 'checkout', '-q', '--detach', 'main');
+    const ref = await worktree(main, join(main, '.claude/worktrees/ref'), '-b', 'ref');
+    const only = await git(ref, 'commit-tree', await git(ref, 'rev-parse', 'HEAD^{tree}'), '-p', 'HEAD', '-m', 'only in a worktree ref');
+    await git(ref, 'update-ref', 'refs/worktree/keep', only);
+    const amended = await worktree(main, join(main, '.claude/worktrees/amended'), '-b', 'amended');
+    await git(amended, 'commit', '-q', '--allow-empty', '-m', 'first try');
+    await git(amended, 'commit', '-q', '--amend', '--allow-empty', '-m', 'second try');
+
+    const items = byLabel(await collector('claude-code').collect(context({ projects: [main] })));
+
+    expect(items.left.blocked).toBe('detached');
+    expect(items.ref.blocked).toBe('detached');
+    expect(items.amended.blocked).toBeUndefined();
+  });
+
+  it('blocks the worktree of a background job kept alive by its resumed session or by the supervisor', async () => {
+    const main = await repo(join(box.home, 'code/app'));
+    const resumed = await worktree(main, join(main, '.claude/worktrees/job-resumed'), '-b', 'job-resumed');
+    const daemon = await worktree(main, join(main, '.claude/worktrees/job-daemon'), '-b', 'job-daemon');
+    const done = await worktree(main, join(main, '.claude/worktrees/job-done'), '-b', 'job-done');
+    for (const path of [resumed, daemon, done]) await usedAt(path, 20);
+    const jobs = join(box.home, '.claude/jobs');
+    const state = (value: object) => JSON.stringify(value);
+    await put(join(jobs, 'aaa111/state.json'), state({ state: 'working', sessionId: 'first', resumeSessionId: 'resumed-live', worktreePath: resumed }));
+    await put(join(jobs, 'bbb222/state.json'), state({ state: 'blocked', sessionId: 'second', worktreePath: daemon }));
+    await put(join(jobs, 'ccc333/state.json'), state({ state: 'done', sessionId: 'third', worktreePath: done }));
+    await put(join(box.home, '.claude/daemon/roster.json'), state({ supervisorPid: 7777, workers: { bbb222: { pid: 7778 } } }));
+    const ctx = context({
+      projects: [main],
+      claudeSessions: [{ pid: 20, sessionId: 'resumed-live', cwd: main }],
+      processes: [{ pid: 7777, exe: '/Users/ana/.local/share/claude/versions/2.1.300', args: 'claude daemon' }],
+    });
+
+    const { items } = await new AiScanner(worktreeCollectors, async () => ctx).scan();
+    const found = Object.fromEntries(items.map((item) => [item.label, [item.blocked, item.heat]]));
+
+    expect(found).toEqual({
+      'job-resumed': ['live-session', 'hot'],
+      'job-daemon': ['live-session', 'hot'],
+      'job-done': [undefined, 'cold'],
+    });
+  });
+
+  it('releases the guard lock an interrupted prune left behind, on the worktree itself and on vanished ones', async () => {
+    const guard = 'macleanfy: protegida durante o git worktree prune';
+    const main = await repo(join(box.home, 'code/app'));
+    const back = await worktree(main, join(main, '.claude/worktrees/back'), '-b', 'back');
+    const gone = await worktree(main, join(box.home, 'external/gone'), '-b', 'gone');
+    await git(main, 'worktree', 'lock', '--reason', guard, back);
+    await git(main, 'worktree', 'lock', '--reason', guard, gone);
+    await rm(gone, { recursive: true, force: true });
+    const ctx = context({ projects: [main] });
+
+    const scanner = new AiScanner(worktreeCollectors, async () => ctx);
+    const { items } = await scanner.scan();
+    expect(items.map((item) => [item.label, item.blocked])).toEqual([['back', undefined]]);
+    expect((await scanner.remove([back])).removed).toBe(1);
+
+    const after = parseWorktreeList(await git(main, 'worktree', 'list', '--porcelain', '-z'));
+    expect(after.map((w) => w.path)).toEqual([main, gone]);
+    expect(after[1]).toMatchObject({ prunable: true, locked: null });
+  });
+
+  it('keeps a PID lock and refuses the removal when the process list is incomplete', async () => {
+    const main = await repo(join(box.home, 'code/app'));
+    const dead = await worktree(main, join(main, '.claude/worktrees/dead'), '-b', 'dead');
+    const reason = 'claude session dead (pid 999999 start Fri Oct  2 13:44:26 2026)';
+    await git(main, 'worktree', 'lock', '--reason', reason, dead);
+    const ctx = context({ projects: [main], processesKnown: false });
+
+    const [item] = await collector('claude-code').collect(ctx);
+
+    expect(item.blocked).toBe('locked');
+    expect(await item.recheck!(ctx)).toBe('unverified');
+    await expect(item.remove!(ctx)).rejects.toThrow('unverified');
+    expect(ctx.trashed).toEqual([]);
+    const after = parseWorktreeList(await git(main, 'worktree', 'list', '--porcelain', '-z'));
+    expect(after.find((w) => w.path === dead)?.locked).toBe(reason);
   });
 });
 

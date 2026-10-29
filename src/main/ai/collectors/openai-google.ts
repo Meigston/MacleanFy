@@ -145,6 +145,8 @@ const codexHome = (ctx: AiContext) => ctx.env.CODEX_HOME || join(ctx.home, '.cod
 
 /** rollout-<data de criação>-<id da thread>.jsonl, ou .jsonl.zst depois de comprimido. */
 const ROLLOUT = /^rollout-.+-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl(?:\.zst)?$/;
+/** Qualquer arquivo de uma thread, até o .zst.tmp de uma compressão em andamento. */
+const ROLLOUT_ANY = /^rollout-.+-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl/;
 
 /** Componentes que o Chromium do app baixa sozinho e caches de GPU; os perfis ficam. */
 const CODEX_BROWSER_CACHES = [
@@ -189,22 +191,23 @@ async function codexCwd(path: string): Promise<string | null> {
 }
 
 async function codexSessions(ctx: AiContext, root: string): Promise<Found[]> {
-  const rollouts = [
-    ...(await findFiles(join(root, 'sessions'), ROLLOUT, 3)),
-    ...(await findFiles(join(root, 'archived_sessions'), ROLLOUT, 0)),
+  const files = [
+    ...(await findFiles(join(root, 'sessions'), ROLLOUT_ANY, 3)),
+    ...(await findFiles(join(root, 'archived_sessions'), ROLLOUT_ANY, 0)),
   ];
   const images = join(root, 'generated_images');
   const snapshotsDir = join(root, 'shell_snapshots');
   const snapshots = (await list(snapshotsDir)).filter((entry) => entry.isFile()).map((entry) => entry.name);
 
-  const threads = new Set<string>();
+  // A thread existe enquanto houver qualquer arquivo dela: as imagens de uma conversa sendo
+  // comprimida não são órfãs.
+  const threads = new Set(files.map((file) => ROLLOUT_ANY.exec(basename(file))?.[1] ?? ''));
   const sessions: Session[] = [];
   // Conversas que geraram imagens: o aviso muda, porque elas podem ser a única cópia.
   const withImages = new Set<string>();
-  for (const file of rollouts) {
+  for (const file of files) {
     const thread = ROLLOUT.exec(basename(file))?.[1];
     if (!thread) continue;
-    threads.add(thread);
     // Imagens e snapshot do shell são da thread: saem com ela, como o Codex faria.
     const own = await measureAll(ctx, [
       file,
@@ -548,6 +551,46 @@ async function geminiSessions(ctx: AiContext, projectDir: string, project: strin
   return sessions;
 }
 
+/** checkpoint-<tag>.json: a conversa que o /chat save guardou e o /chat resume abre. */
+const GEMINI_SAVED_CHAT = /^checkpoint-.+\.json$/;
+
+async function geminiSavedChats(
+  ctx: AiContext,
+  projectDir: string,
+  project: string | null,
+  label: string,
+  writers: number,
+  reopened: (now: AiContext) => boolean
+): Promise<Found[]> {
+  const saved: Session[] = [];
+  for (const entry of await list(projectDir)) {
+    if (!entry.isFile() || !GEMINI_SAVED_CHAT.test(entry.name)) continue;
+    const file = join(projectDir, entry.name);
+    const measured = await ctx.measure(file);
+    saved.push({ project, file, paths: [file], size: measured.size, lastUsed: measured.newest });
+  }
+  return groupSessions(ctx, saved).map(
+    (group): Found => ({
+      tool: 'gemini-cli',
+      kind: 'sessions',
+      label,
+      project,
+      path: group.path,
+      key: `saved-${group.key}`,
+      paths: group.paths,
+      size: group.size,
+      count: group.count,
+      lastUsed: group.lastUsed,
+      safety: 'moderate',
+      removal: 'trash',
+      hint: 'saved-chat',
+      // Com a CLI aberta no projeto, um /chat resume lê daqui e um /chat save regrava a tag.
+      ...(writers > 0 ? { blocked: 'in-use' as const } : {}),
+      recheck: async (now) => (reopened(now) || (await touchedSince(group.files, group.lastUsed)) ? 'in-use' : null),
+    })
+  );
+}
+
 const geminiCli: Collector = {
   id: 'gemini-cli',
   async collect(ctx) {
@@ -599,11 +642,12 @@ const geminiCli: Collector = {
           });
         }
 
-        // /restore: o JSON de cada ponto, os /chat save e o git sombra, que não tem limpeza nenhuma.
-        const tags = (await list(projectDir))
-          .filter((entry) => entry.isFile() && /^checkpoint-.+\.json$/.test(entry.name))
-          .map((entry) => join(projectDir, entry.name));
-        const checkpoints = await measureAll(ctx, [join(projectDir, 'checkpoints'), ...tags, historyDir]);
+        // Os /chat save são conversas guardadas de propósito: saem como conversa, à parte, e
+        // nunca junto com os pontos do /restore.
+        found.push(...(await geminiSavedChats(ctx, projectDir, project, label, writers, reopened)));
+
+        // /restore: o JSON de cada ponto e o git sombra, que não tem limpeza nenhuma.
+        const checkpoints = await measureAll(ctx, [join(projectDir, 'checkpoints'), historyDir]);
         if (checkpoints.size <= 0) continue;
         const points = (await list(join(projectDir, 'checkpoints'))).filter((entry) => entry.isFile() && entry.name.endsWith('.json')).length;
         found.push({
@@ -614,7 +658,7 @@ const geminiCli: Collector = {
           path: checkpoints.paths[0],
           paths: checkpoints.paths,
           size: checkpoints.size,
-          count: Math.max(points + tags.length, 1),
+          count: Math.max(points, 1),
           lastUsed: checkpoints.newest,
           safety: 'moderate',
           removal: 'trash',
@@ -643,6 +687,34 @@ const ANTIGRAVITY_CACHES = [
   'Crashpad',
   'blob_storage',
 ];
+
+/** O id do pacote: o Spotlight acha o app em qualquer pasta ou disco, e com qualquer nome. */
+const ANTIGRAVITY_ID = 'com.google.antigravity';
+/** Antigravity.app, "Antigravity 2.app", "Antigravity Beta.app"… */
+const ANTIGRAVITY_BUNDLE = /^Antigravity[^/]*\.app$/;
+/** Lixeira da conta ou de um disco externo: o app que está lá já foi desinstalado. */
+const IN_TRASH = /\/\.Trash(?:es)?\//;
+
+type AppPresence = 'running' | 'installed' | 'unknown';
+
+/** Por que os restos não saem, conforme o app voltou, abriu ou não deu para saber. */
+const PRESENCE_BLOCK: Record<AppPresence, AiBlock> = { running: 'app-open', installed: 'current', unknown: 'unverified' };
+
+/**
+ * Onde o app está, ou nulo se sumiu de vez. Na dúvida (o ps, o lsof ou o Spotlight falhou),
+ * conta como presente: as extensões dele só viram resto com certeza.
+ */
+async function antigravityApp(ctx: AiContext, applications: string): Promise<AppPresence | null> {
+  if (!ctx.processesKnown) return 'unknown';
+  if (ctx.running(ANTIGRAVITY)) return 'running';
+  for (const dir of [applications, join(ctx.home, 'Applications')]) {
+    if ((await list(dir)).some((entry) => ANTIGRAVITY_BUNDLE.test(entry.name))) return 'installed';
+  }
+  // Num disco externo, numa subpasta ou renomeado, só o Spotlight acha.
+  const spotlight = await ctx.exec('/usr/bin/mdfind', [`kMDItemCFBundleIdentifier == "${ANTIGRAVITY_ID}"`], { timeoutMs: 10_000 });
+  if (spotlight.code !== 0) return 'unknown';
+  return spotlight.stdout.split('\n').some((line) => line.startsWith('/') && !IN_TRASH.test(line)) ? 'installed' : null;
+}
 
 /** As pastas que o extensions.json aponta: são as versões em uso. */
 async function registeredExtensions(extensions: string): Promise<Set<string>> {
@@ -725,11 +797,12 @@ function antigravity(applications: string): Collector {
           junk: 'old-version',
           safety: 'safe',
           removal: 'trash',
+          // A janela aberta segue com a versão velha carregada até recarregar a extensão.
+          ...closed,
         });
       }
 
-      const bundles = await Promise.all([join(applications, 'Antigravity.app'), join(ctx.home, 'Applications/Antigravity.app')].map(statOf));
-      if (!bundles.some(Boolean)) {
+      if (!(await antigravityApp(ctx, applications))) {
         // Sem o app, as extensões em uso viraram resto; voltam só reinstalando uma a uma. Vale o
         // extensions.json: a que está nele e também no .obsolete continua sendo a em uso.
         const active = [...registered].filter((name) => SAFE_NAME.test(name)).sort();
@@ -751,6 +824,11 @@ function antigravity(applications: string): Collector {
             confidence: 'low',
             safety: 'moderate',
             removal: 'trash',
+            // Reinstalado ou aberto depois da análise, as extensões voltam a ser as em uso.
+            recheck: async (now) => {
+              const app = await antigravityApp(now, applications);
+              return app ? PRESENCE_BLOCK[app] : null;
+            },
           });
         }
       }

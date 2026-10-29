@@ -41,6 +41,7 @@ export interface FakeOptions {
   processes?: ProcessInfo[];
   projects?: string[];
   claudeSessions?: AiContext['claudeSessions'];
+  processesKnown?: boolean;
   env?: Record<string, string | undefined>;
   /** Responde às chamadas de `exec`; sem ela, todo comando sai com código 127. */
   exec?: (file: string, args: string[], options?: { cwd?: string }) => Promise<ExecResult> | ExecResult;
@@ -57,6 +58,7 @@ export function fakeContext(options: FakeOptions): AiContext & { trashed: string
     now: NOW,
     env: options.env ?? {},
     processes,
+    processesKnown: options.processesKnown ?? true,
     claudeSessions: options.claudeSessions ?? [],
     projects: options.projects ?? [],
     isCold: (ms) => ms <= 0 || NOW - ms > AI_COLD_DAYS * DAY,

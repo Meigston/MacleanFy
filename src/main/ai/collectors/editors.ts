@@ -407,8 +407,10 @@ async function copilotCli(ctx: AiContext): Promise<Found[]> {
     if (entry.isDirectory()) {
       const header = await sessionHeader(join(path, 'workspace.yaml'));
       const { size, newest } = await ctx.measure(path);
-      // O events.jsonl só cresce; o mtime da pasta não acompanha.
-      const lastUsed = header.updatedAt || (await mtimeOf(join(path, 'events.jsonl'))) || newest;
+      // O updated_at não acompanha o uso (em muitas sessões fica na data da criação) e o
+      // events.jsonl só cresce: vale o mais novo entre ele e tudo o que a sessão grava. Errar
+      // para quente é o lado seguro.
+      const lastUsed = Math.max(header.updatedAt, newest);
       const who = header.cwd ? owner(ctx, header.cwd, state) : unknown;
       return { ...who, anchor: path, paths: [path], size, lastUsed, live: await liveLock(ctx, path) };
     }
@@ -687,6 +689,14 @@ async function vscode(ctx: AiContext): Promise<Found[]> {
 
 // ——— Cursor, Windsurf, Trae, Kiro: instalado ou resto ————————————————————————————————
 
+/** Onde procurar o que está instalado; os testes trocam pelas pastas da conta de mentira. */
+interface Where {
+  /** As pastas de apps, olhadas no primeiro nível e nas subpastas (/Applications/AI/Cursor.app). */
+  appDirs: string[];
+  /** Pastas de executáveis além de ~/.local/bin: o Homebrew e o PATH. */
+  binDirs: string[];
+}
+
 interface Leftover {
   path: string;
   /** Só estas partes saem; o resto da pasta é configuração. */
@@ -697,14 +707,63 @@ interface Leftover {
 
 interface AiEditor {
   tool: AiToolId;
-  /** O nome do .app em /Applications ou ~/Applications. */
-  app: RegExp;
+  /** O nome do .app, sem a extensão; "Cursor 2.app" também conta. */
+  names: string[];
+  /** O CFBundleIdentifier: pelo Spotlight acha o app renomeado ou fora das pastas de apps. */
+  bundleIds: string[];
   exe: RegExp;
   extensions(ctx: AiContext): string[];
   /** O que fica no disco depois que o app sai. Nunca a configuração (mcp.json, regras, argv.json). */
-  leftovers(ctx: AiContext): Promise<Leftover[]>;
+  leftovers(ctx: AiContext, where: Where): Promise<Leftover[]>;
   /** Onde o app guarda os chats, que só ele sabe apagar. */
   chats(ctx: AiContext): string[];
+}
+
+/**
+ * O que sai da pasta de um fork do VS Code em Application Support: só cache e log, que o app
+ * refaz. User/ (settings, globalStorage com o state.vscdb dos chats e tokens), Backups/ (arquivos
+ * não salvos) e Workspaces/ ficam: se o app voltar, ou se ele só não foi achado, está tudo lá.
+ */
+const ELECTRON_CACHES = [
+  'Cache',
+  'CachedData',
+  'CachedConfigurations',
+  'CachedProfilesData',
+  'CachedExtensionVSIXs',
+  'Code Cache',
+  'GPUCache',
+  'DawnCache',
+  'DawnGraphiteCache',
+  'DawnWebGPUCache',
+  'Crashpad',
+  'sentry',
+  'logs',
+];
+
+const supportCaches = (ctx: AiContext, app: string): Leftover => ({ path: home(ctx, join(APP_SUPPORT, app)), parts: ELECTRON_CACHES });
+
+/** O processo do cursor-agent: o node das versões baixadas ou o da fórmula do Homebrew. */
+const CURSOR_AGENT_PROCESS = /cursor-(agent|cli)/;
+
+/**
+ * O cursor-agent (CLI) vive sem o app e guarda o histórico dele em ~/.cursor/chats. Conta como
+ * instalado pelo link com qualquer dos dois nomes, pelas versões baixadas ou pelo processo vivo.
+ */
+async function cursorAgentPresent(ctx: AiContext, where: Where): Promise<boolean> {
+  // Sem a lista de processos não dá para dizer que o CLI está parado.
+  if (!ctx.processesKnown) return true;
+  if (ctx.processes.some((process) => CURSOR_AGENT_PROCESS.test(process.exe) || CURSOR_AGENT_PROCESS.test(process.args))) return true;
+  // As versões que o instalador baixa, mesmo que o link tenha sumido.
+  if (await statOf(home(ctx, '.local/share/cursor-agent'))) return true;
+  const local = home(ctx, '.local/bin');
+  for (const dir of new Set([local, ...where.binDirs])) {
+    if (await statOf(join(dir, 'cursor-agent'))) return true;
+    // `agent` é o nome novo, mas é genérico: fora de ~/.local/bin, onde o instalador do Cursor
+    // o põe, só conta o link que leva ao Cursor.
+    const agent = join(dir, 'agent');
+    if (dir === local ? await statOf(agent) : /cursor/i.test(await readlink(agent).catch(() => ''))) return true;
+  }
+  return false;
 }
 
 const CURSOR_BUNDLE = 'com.todesktop.230313mzl4w4u92';
@@ -712,22 +771,23 @@ const CURSOR_BUNDLE = 'com.todesktop.230313mzl4w4u92';
 const AI_EDITORS: AiEditor[] = [
   {
     tool: 'cursor',
-    app: /^Cursor( .*)?\.app$/,
+    names: ['Cursor'],
+    bundleIds: [CURSOR_BUNDLE],
     exe: CURSOR_EXE,
     extensions: (ctx) => [home(ctx, '.cursor/extensions')],
-    leftovers: async (ctx) => {
+    leftovers: async (ctx, where) => {
       const items: Leftover[] = [
         { path: home(ctx, '.cursor/extensions'), huge: true },
-        { path: home(ctx, `${APP_SUPPORT}/Cursor`) },
+        supportCaches(ctx, 'Cursor'),
         { path: home(ctx, `Library/Caches/${CURSOR_BUNDLE}`) },
         { path: home(ctx, `Library/Caches/${CURSOR_BUNDLE}.ShipIt`) },
         { path: home(ctx, `${APP_SUPPORT}/Caches/cursor-updater`) },
         { path: home(ctx, 'Library/Logs/Cursor') },
         { path: home(ctx, `Library/HTTPStorages/${CURSOR_BUNDLE}`) },
       ];
-      // O cursor-agent (CLI) usa estas pastas e vive sem o app. ~/.cursor/worktrees nunca: pode
-      // ter trabalho que só existe ali.
-      if (!(await statOf(home(ctx, '.local/bin/cursor-agent')))) {
+      // O cursor-agent usa estas pastas e vive sem o app. ~/.cursor/worktrees nunca: pode ter
+      // trabalho que só existe ali.
+      if (!(await cursorAgentPresent(ctx, where))) {
         items.push(...['projects', 'chats', 'acp-sessions', 'ai-tracking'].map((name) => ({ path: home(ctx, `.cursor/${name}`) })));
       }
       return items;
@@ -736,15 +796,18 @@ const AI_EDITORS: AiEditor[] = [
   },
   {
     tool: 'windsurf',
-    app: /^(Windsurf|Devin)( .*)?\.app$/,
+    // O Windsurf virou Devin (ou Devin Desktop) numa atualização; o id do Devin não é conhecido,
+    // e o nome do app cobre.
+    names: ['Windsurf', 'Devin'],
+    bundleIds: ['com.exafunction.windsurf'],
     exe: WINDSURF_EXE,
     extensions: (ctx) => [home(ctx, '.windsurf/extensions'), home(ctx, '.devin/extensions')],
     // ~/.codeium fica: o plugin do Windsurf para VS Code e JetBrains usa a mesma pasta.
     leftovers: async (ctx) => [
       { path: home(ctx, '.windsurf/extensions'), huge: true },
       { path: home(ctx, '.devin/extensions'), huge: true },
-      { path: home(ctx, `${APP_SUPPORT}/Windsurf`) },
-      { path: home(ctx, `${APP_SUPPORT}/Devin`) },
+      supportCaches(ctx, 'Windsurf'),
+      supportCaches(ctx, 'Devin'),
       { path: home(ctx, 'Library/Caches/com.exafunction.windsurf') },
       { path: home(ctx, 'Library/Caches/com.exafunction.windsurf.ShipIt') },
       { path: home(ctx, 'Library/HTTPStorages/com.exafunction.windsurf') },
@@ -753,7 +816,8 @@ const AI_EDITORS: AiEditor[] = [
   },
   {
     tool: 'trae',
-    app: /^Trae( .*)?\.app$/,
+    names: ['Trae'],
+    bundleIds: ['com.trae.app'],
     exe: TRAE_EXE,
     extensions: (ctx) => [home(ctx, '.trae/extensions')],
     leftovers: async (ctx) => [
@@ -761,7 +825,7 @@ const AI_EDITORS: AiEditor[] = [
       // config.json fica.
       { path: home(ctx, '.trae-aicc'), parts: ['.ripgrep', '.code_contribution', '.code_contribution_changelog'] },
       { path: home(ctx, '.icube-remote-ssh/server-cache') },
-      { path: home(ctx, `${APP_SUPPORT}/Trae`) },
+      supportCaches(ctx, 'Trae'),
       { path: home(ctx, 'Library/Caches/com.trae.app') },
       { path: home(ctx, 'Library/Caches/com.trae.ShipIt') },
       { path: home(ctx, 'Library/HTTPStorages/com.trae.app') },
@@ -770,25 +834,61 @@ const AI_EDITORS: AiEditor[] = [
   },
   {
     tool: 'kiro',
-    app: /^Kiro( .*)?\.app$/,
+    names: ['Kiro'],
+    bundleIds: ['dev.kiro.desktop'],
     exe: KIRO_EXE,
     extensions: (ctx) => [join(envDir(ctx, 'KIRO_HOME', '.kiro'), 'extensions')],
     // O resto de ~/.kiro é do Kiro CLI e de configuração (steering, mcp.json).
     leftovers: async (ctx) => [
       { path: join(envDir(ctx, 'KIRO_HOME', '.kiro'), 'extensions'), huge: true },
-      { path: home(ctx, `${APP_SUPPORT}/Kiro`) },
+      supportCaches(ctx, 'Kiro'),
       { path: home(ctx, 'Library/Caches/dev.kiro.desktop') },
     ],
     chats: () => [],
   },
 ];
 
-async function installed(ctx: AiContext, appDirs: readonly string[], editor: AiEditor): Promise<boolean> {
-  if (ctx.running(editor.exe)) return true;
-  for (const dir of appDirs) {
-    if ((await entries(dir)).some((entry) => editor.app.test(entry.name))) return true;
+const appPattern = (editor: AiEditor) => new RegExp(`^(${editor.names.join('|')})( .*)?\\.app$`);
+
+/** Um app que o Spotlight sempre acha: sem ele na resposta, o Spotlight está desligado. */
+const SPOTLIGHT_PROBE = { id: 'com.apple.finder', path: '/System/Library/CoreServices/Finder.app' };
+const SPOTLIGHT_TIMEOUT_MS = 3000;
+
+/**
+ * O app em qualquer lugar que o Spotlight indexa (disco externo, ~/Downloads, renomeado), pelo id
+ * e pelo nome. Na dúvida (Spotlight desligado, erro, demora), conta como instalado: o pior que
+ * acontece é não oferecer os restos.
+ */
+async function spotlightFinds(ctx: AiContext, editor: AiEditor): Promise<boolean> {
+  const query = [
+    ...editor.bundleIds.map((id) => `kMDItemCFBundleIdentifier == '${id}'`),
+    ...editor.names.flatMap((name) => [`kMDItemFSName == '${name}.app'`, `kMDItemFSName == '${name} *.app'`]),
+    `kMDItemCFBundleIdentifier == '${SPOTLIGHT_PROBE.id}'`,
+  ].join(' || ');
+  const { code, stdout } = await ctx.exec('/usr/bin/mdfind', [query], { timeoutMs: SPOTLIGHT_TIMEOUT_MS });
+  if (code !== 0) return true;
+  const lines = stdout.split('\n').map((line) => line.trim()).filter(Boolean);
+  // A cópia que o atualizador baixou (Caches/<id>.ShipIt) e o app na Lixeira não são app instalado.
+  const ignored = (path: string) =>
+    path === SPOTLIGHT_PROBE.path || path.startsWith(home(ctx, 'Library') + '/') || path.startsWith(home(ctx, '.Trash') + '/') || path.includes('/.Trashes/');
+  if (lines.some((path) => !ignored(path))) return true;
+  return !lines.includes(SPOTLIGHT_PROBE.path);
+}
+
+async function installed(ctx: AiContext, where: Where, editor: AiEditor): Promise<boolean> {
+  // Sem a lista de processos não dá para dizer que o app está fechado.
+  if (!ctx.processesKnown || ctx.running(editor.exe)) return true;
+  const app = appPattern(editor);
+  for (const dir of where.appDirs) {
+    for (const entry of await entries(dir)) {
+      if (app.test(entry.name)) return true;
+      // Uma subpasta de apps (/Applications/AI, /Applications/Setapp), sem descer mais.
+      if (entry.isDirectory() && !entry.name.endsWith('.app') && (await entries(join(dir, entry.name))).some((inner) => app.test(inner.name))) {
+        return true;
+      }
+    }
   }
-  return false;
+  return spotlightFinds(ctx, editor);
 }
 
 async function leftover(ctx: AiContext, tool: AiToolId, item: Leftover): Promise<Found | null> {
@@ -827,9 +927,12 @@ async function leftover(ctx: AiContext, tool: AiToolId, item: Leftover): Promise
   };
 }
 
-async function aiEditor(ctx: AiContext, appDirs: readonly string[], editor: AiEditor): Promise<Found[]> {
-  if (!(await installed(ctx, appDirs, editor))) {
-    const items = await Promise.all((await editor.leftovers(ctx)).map((item) => leftover(ctx, editor.tool, item)));
+async function aiEditor(ctx: AiContext, where: Where, editor: AiEditor): Promise<Found[]> {
+  const leftovers = await editor.leftovers(ctx, where);
+  // Sem rastro do app no disco não há o que listar, instalado ou não: nem pergunta ao Spotlight.
+  if ((await present([...leftovers.map((item) => item.path), ...editor.extensions(ctx), ...editor.chats(ctx)])).length === 0) return [];
+  if (!(await installed(ctx, where, editor))) {
+    const items = await Promise.all(leftovers.map((item) => leftover(ctx, editor.tool, item)));
     return items.filter((item): item is Found => item !== null);
   }
 
@@ -1055,19 +1158,23 @@ async function jetbrains(ctx: AiContext): Promise<Found[]> {
 export interface EditorOptions {
   /** Onde procurar os apps instalados; os testes trocam pelas pastas da conta de mentira. */
   appDirs?(ctx: AiContext): string[];
+  /** Onde procurar os executáveis dos CLIs, além de ~/.local/bin. */
+  binDirs?(ctx: AiContext): string[];
 }
 
 const defaultAppDirs = (ctx: AiContext) => ['/Applications', join(ctx.home, 'Applications')];
+const defaultBinDirs = (ctx: AiContext) => ['/opt/homebrew/bin', '/usr/local/bin', ...(ctx.env.PATH ?? '').split(':').filter((dir) => isAbsolute(dir))];
 
 export function createEditorCollectors(options: EditorOptions = {}): Collector[] {
   const appDirs = options.appDirs ?? defaultAppDirs;
+  const binDirs = options.binDirs ?? defaultBinDirs;
   const collector = (id: AiToolId, read: (ctx: AiContext) => Promise<Found[]>): Collector => ({
     id,
     collect: async (ctx) => (await read(ctx)).filter((item) => item.size > 0),
   });
   const editor = (tool: AiToolId) => {
     const spec = AI_EDITORS.find((candidate) => candidate.tool === tool)!;
-    return collector(tool, (ctx) => aiEditor(ctx, appDirs(ctx), spec));
+    return collector(tool, (ctx) => aiEditor(ctx, { appDirs: appDirs(ctx), binDirs: binDirs(ctx) }, spec));
   };
   // O Copilot mora em três lugares que não dependem um do outro: um erro num não esconde os outros.
   return [

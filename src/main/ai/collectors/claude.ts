@@ -80,11 +80,21 @@ async function measureAll(ctx: AiContext, paths: string[]) {
   );
 }
 
-/** Quem está com cada arquivo aberto ou mapeado, numa chamada só do `lsof`. */
-async function openBy(ctx: AiContext, paths: string[]): Promise<Map<string, number[]>> {
+/** O lsof sai com 1 quando algum arquivo pedido não está aberto; outro código, ou o tempo-limite (-1), é falha. */
+const lsofOk = (code: number) => code === 0 || code === 1;
+
+/** Sem a lista de processos (o ps ou o lsof falhou), sessão viva, lock e supervisor não se conferem: na dúvida, em uso. */
+const unverified = (ctx: AiContext): AiBlock | null => (ctx.processesKnown ? null : 'unverified');
+
+/**
+ * Quem está com cada arquivo aberto ou mapeado, numa chamada só do `lsof`. Nulo quando o lsof
+ * falhou ou estourou o tempo: a saída cortada não diz que ninguém usa.
+ */
+async function openBy(ctx: AiContext, paths: string[]): Promise<Map<string, number[]> | null> {
   const users = new Map<string, number[]>();
   if (paths.length === 0) return users;
-  const { stdout } = await ctx.exec('/usr/sbin/lsof', ['-nP', '-F', 'pn', '--', ...paths], { timeoutMs: 20_000 });
+  const { code, stdout } = await ctx.exec('/usr/sbin/lsof', ['-nP', '-F', 'pn', '--', ...paths], { timeoutMs: 20_000 });
+  if (!lsofOk(code)) return null;
   let pid = 0;
   for (const line of stdout.split('\n')) {
     if (line.startsWith('p')) pid = Number(line.slice(1));
@@ -247,7 +257,9 @@ async function sessionItems(ctx: AiContext, claude: string, index: SessionIndex,
       if (key === 'live') {
         item.blocked = 'live-session';
       } else {
-        item.recheck = async (now) => (now.claudeSessions.some((s) => ids.includes(s.sessionId)) ? 'live-session' : null);
+        const doubt = unverified(ctx);
+        if (doubt) item.blocked = doubt;
+        item.recheck = (now) => sessionBlock(now, claude, ids);
       }
       // O Desktop guarda as sessões dele para sempre; a varredura do cleanupPeriodDays não as alcança.
       if (key === 'cold' && !project?.startsWith(join(ctx.home, 'Library/Application Support/Claude/'))) item.hint = 'cleanup-period';
@@ -260,30 +272,64 @@ async function sessionItems(ctx: AiContext, claude: string, index: SessionIndex,
 // ---------------------------------------------------------------------------
 // Sessões em segundo plano
 
+interface Job {
+  name: string;
+  dir: string;
+  state: Json;
+  /** A sessão do job e a que ele retoma. */
+  ids: string[];
+}
+
+async function readJobs(claude: string): Promise<Job[]> {
+  const root = join(claude, 'jobs');
+  const jobs: Job[] = [];
+  for (const entry of await list(root)) {
+    if (!entry.isDirectory()) continue;
+    const dir = join(root, entry.name);
+    const state = (await readJson(join(dir, 'state.json'))) ?? {};
+    const ids = [text(state.sessionId), text(state.resumeSessionId)].filter((id): id is string => !!id);
+    jobs.push({ name: entry.name, dir, state, ids });
+  }
+  return jobs;
+}
+
 /**
  * O campo `state` mente (há job "working" de supervisor morto e job "done" adotado por uma sessão
  * viva), então o sinal é a sessão viva com o mesmo id, ou o supervisor vivo ainda com o job.
  */
-async function jobBlock(ctx: AiContext, claude: string, job: string, state: Json, ids: string[]): Promise<AiBlock | null> {
-  if (ctx.claudeSessions.some((session) => ids.includes(session.sessionId))) return 'live-session';
+async function jobBlock(ctx: AiContext, claude: string, job: Job): Promise<AiBlock | null> {
+  if (ctx.claudeSessions.some((session) => job.ids.includes(session.sessionId))) return 'live-session';
+  // Sem a lista de processos, não se sabe se o supervisor roda.
+  if (!ctx.processesKnown) return 'unverified';
   const roster = await readJson(join(claude, 'daemon', 'roster.json'));
   if (!claudeAlive(ctx, roster?.supervisorPid)) return null;
-  const listed = JSON.stringify(roster?.workers ?? null).includes(job);
-  return listed || state.state !== 'done' ? 'live-session' : null;
+  const listed = JSON.stringify(roster?.workers ?? null).includes(job.name);
+  return listed || job.state.state !== 'done' ? 'live-session' : null;
+}
+
+/**
+ * Sessão de job não aparece em ~/.claude/sessions, e o supervisor pode tê-la retomado depois da
+ * análise: os jobs são lidos de novo, com os processos de agora.
+ */
+async function sessionBlock(now: AiContext, claude: string, ids: readonly string[]): Promise<AiBlock | null> {
+  if (now.claudeSessions.some((s) => ids.includes(s.sessionId))) return 'live-session';
+  for (const job of await readJobs(claude)) {
+    if (!job.ids.some((id) => ids.includes(id))) continue;
+    const blocked = await jobBlock(now, claude, job);
+    if (blocked) return blocked;
+  }
+  return unverified(now);
 }
 
 async function jobItems(ctx: AiContext, claude: string, index: SessionIndex): Promise<{ items: Found[]; busy: Set<string> }> {
-  const root = join(claude, 'jobs');
   const items: Found[] = [];
   const busy = new Set<string>();
-  for (const job of await list(root)) {
-    if (!job.isDirectory()) continue;
-    const dir = join(root, job.name);
-    const state = (await readJson(join(dir, 'state.json'))) ?? {};
-    const ids = [text(state.sessionId), text(state.resumeSessionId)].filter((id): id is string => !!id);
-    const check = (now: AiContext) => jobBlock(now, claude, job.name, state, ids);
+  for (const job of await readJobs(claude)) {
+    const { dir, state, ids } = job;
+    const check = (now: AiContext) => jobBlock(now, claude, job);
     const blocked = await check(ctx);
-    if (blocked) ids.forEach((id) => busy.add(id));
+    // 'unverified' não faz da sessão uma sessão viva: ela fica barrada pela mesma dúvida.
+    if (blocked === 'live-session') ids.forEach((id) => busy.add(id));
 
     // Só o rascunho sai: state.json, timeline e adopt.json são a lista de agentes do supervisor.
     const tmp = join(dir, 'tmp');
@@ -325,9 +371,12 @@ async function jobItems(ctx: AiContext, claude: string, index: SessionIndex): Pr
  * O `ps` mostra só "claude" para o binário nativo, então quem usa cada versão vem do `lsof` e do lock
  * que a ferramenta grava. Apagar uma versão em uso trava a sessão que roda dela.
  */
-async function versionInUse(ctx: AiContext, path: string, lock: string): Promise<boolean> {
-  if (claudeAlive(ctx, (await readJson(lock))?.pid)) return true;
-  return ((await openBy(ctx, [path])).get(path)?.length ?? 0) > 0;
+async function versionBlock(ctx: AiContext, path: string, lock: string): Promise<AiBlock | null> {
+  if (claudeAlive(ctx, (await readJson(lock))?.pid)) return 'in-use';
+  const users = await openBy(ctx, [path]);
+  if ((users?.get(path)?.length ?? 0) > 0) return 'in-use';
+  // Lock de PID que não aparece numa lista de processos incompleta não quer dizer processo morto.
+  return users && ctx.processesKnown ? null : 'unverified';
 }
 
 async function cliVersions(ctx: AiContext): Promise<Found[]> {
@@ -353,7 +402,7 @@ async function cliVersions(ctx: AiContext): Promise<Found[]> {
     const lockPath = join(locks, `${name}.lock`);
     const lock = await readJson(lockPath);
     const measured = await ctx.measure(path);
-    const busy = claudeAlive(ctx, lock?.pid) || (users.get(path)?.length ?? 0) > 0;
+    const busy = claudeAlive(ctx, lock?.pid) || (users?.get(path)?.length ?? 0) > 0;
     const acquired = timeOf(lock?.acquiredAt);
     const item: Found = {
       tool: 'claude-code',
@@ -375,7 +424,9 @@ async function cliVersions(ctx: AiContext): Promise<Found[]> {
     } else {
       item.junk = 'old-version';
       if (busy) item.blocked = 'in-use';
-      item.recheck = async (now) => ((await versionInUse(now, path, lockPath)) ? 'in-use' : null);
+      // Sem o lsof ou sem a lista de processos, ninguém garante que a versão está livre.
+      else if (!users || !ctx.processesKnown) item.blocked = 'unverified';
+      item.recheck = (now) => versionBlock(now, path, lockPath);
     }
     items.push(item);
   }
@@ -448,6 +499,8 @@ async function leftovers(ctx: AiContext, claude: string): Promise<Found[]> {
     ctx,
     stale.map((snapshot) => snapshot.file)
   );
+  // As sessões vivas vêm da lista de processos: sem ela, a data de corte não vale.
+  const doubt = unverified(ctx) ?? undefined;
   if (snapshotSize.size > 0) {
     items.push({
       ...base('shell-snapshots', 'cache', 'safe'),
@@ -456,9 +509,10 @@ async function leftovers(ctx: AiContext, claude: string): Promise<Found[]> {
       size: snapshotSize.size,
       count: stale.length,
       lastUsed: snapshotSize.newest,
+      ...(doubt ? { blocked: doubt } : {}),
       recheck: async (now) => {
         const limit = await oldestLiveStart(now, claude);
-        return stale.some((snapshot) => snapshot.created >= limit) ? 'live-session' : null;
+        return stale.some((snapshot) => snapshot.created >= limit) ? 'live-session' : unverified(now);
       },
     });
   }
@@ -477,7 +531,9 @@ async function leftovers(ctx: AiContext, claude: string): Promise<Found[]> {
       size: telemetrySize.size,
       count: failed.length,
       lastUsed: telemetrySize.newest,
-      recheck: async (now) => (now.claudeSessions.some((s) => failed.some((file) => sessionOf(file) === s.sessionId)) ? 'live-session' : null),
+      ...(doubt ? { blocked: doubt } : {}),
+      recheck: async (now) =>
+        now.claudeSessions.some((s) => failed.some((file) => sessionOf(file) === s.sessionId)) ? 'live-session' : unverified(now),
     });
   }
 
@@ -485,7 +541,7 @@ async function leftovers(ctx: AiContext, claude: string): Promise<Found[]> {
   const logSize = await ctx.measure(daemonLog);
   if (logSize.size > 0) {
     const supervisor = async (now: AiContext): Promise<AiBlock | null> =>
-      claudeAlive(now, (await readJson(join(claude, 'daemon', 'roster.json')))?.supervisorPid) ? 'in-use' : null;
+      claudeAlive(now, (await readJson(join(claude, 'daemon', 'roster.json')))?.supervisorPid) ? 'in-use' : unverified(now);
     items.push({
       ...base('daemon.log', 'logs', 'safe'),
       path: daemonLog,
@@ -636,7 +692,7 @@ const claudeCode: Collector = {
 // ---------------------------------------------------------------------------
 // Claude Desktop
 
-const appClosed = async (ctx: AiContext): Promise<AiBlock | null> => (ctx.running(DESKTOP_EXE) ? 'app-open' : null);
+const appClosed = async (ctx: AiContext): Promise<AiBlock | null> => (ctx.running(DESKTOP_EXE) ? 'app-open' : unverified(ctx));
 
 /** Cópias do Claude Code que o app baixa (aba Code e VM do Cowork): sai a que não é a atual. */
 async function desktopVersions(ctx: AiContext, root: string, current: string | null): Promise<Found[]> {
@@ -692,7 +748,8 @@ const claudeDesktop: Collector = {
     if (vmSize.size > 0) {
       const bundle = join(vm, 'claudevm.bundle');
       const rootfs = join(bundle, 'rootfs.img');
-      const running = ((await openBy(ctx, [rootfs])).get(rootfs)?.length ?? 0) > 0;
+      // Só para a data: o disco sai pelo app, nunca daqui.
+      const running = ((await openBy(ctx, [rootfs]))?.get(rootfs)?.length ?? 0) > 0;
       const signals = await Promise.all([join(logs, 'coworkd.log'), join(logs, 'cowork_vm_swift.log'), join(bundle, 'sessiondata.img')].map(mtimeOf));
       const used = Math.max(...signals);
       items.push({

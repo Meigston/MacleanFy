@@ -1,5 +1,5 @@
-import { access, constants, open, readFile, readdir } from 'node:fs/promises';
-import { join, relative, resolve } from 'node:path';
+import { access, constants, lstat, open, readFile, readdir, readlink } from 'node:fs/promises';
+import { dirname, join, relative, resolve } from 'node:path';
 import type { AiBlock, AiToolId } from '../../../shared/api';
 import type { AiContext, Collector, Found } from '../types';
 
@@ -47,6 +47,130 @@ function envDir(ctx: AiContext, name: string): string | null {
 
 const cacheHome = (ctx: AiContext) => envDir(ctx, 'XDG_CACHE_HOME') ?? join(ctx.home, '.cache');
 
+/** Pastas que o macOS só deixa ler com autorização: abrir uma delas mostra o pedido na tela. */
+const PROTECTED = [
+  'Documents',
+  'Desktop',
+  'Downloads',
+  'Library/Mobile Documents',
+  'Library/CloudStorage',
+  'Library/Containers',
+  'Library/Group Containers',
+  'Library/Mail',
+  'Library/Messages',
+  'Library/Safari',
+];
+
+const inside = (path: string, dir: string) => path === dir || path.startsWith(dir + '/');
+
+/**
+ * Dá para ler sem pedido de autorização e sem tocar disco externo ou de rede: dentro da conta e
+ * fora das pastas protegidas, ou num projeto que a análise já lê (a regra do automation.ts).
+ */
+function readableDir(ctx: AiContext, path: string): boolean {
+  if (ctx.projects.some((project) => inside(path, project))) return true;
+  return path.startsWith(ctx.home + '/') && !PROTECTED.some((dir) => inside(path, join(ctx.home, dir)));
+}
+
+/**
+ * A pasta de uma ferramenta, ou nulo quando não se lê: modelo num SSD ou num compartilhamento
+ * (OLLAMA_MODELS, downloadsFolder, HF_HOME, modelPath) abriria o pedido do macOS e, com a rede
+ * caída, prenderia a análise. Link no caminho (~/.ollama/models apontando para /Volumes) conta
+ * pelo destino, que é aonde o readdir iria; só se lê o próprio link, nunca o outro lado.
+ */
+async function modelDir(ctx: AiContext, path: string): Promise<string | null> {
+  let target = path;
+  for (let hops = 0; hops < 8; hops++) {
+    if (!readableDir(ctx, target)) return null;
+    const parts = relative(ctx.home, target).split('/');
+    let next: string | null = null;
+    for (let depth = 1; depth <= parts.length && !next; depth++) {
+      const step = join(ctx.home, ...parts.slice(0, depth));
+      const info = await lstat(step).catch(() => null);
+      // Ainda não existe: o readdir não acha nada, e não sai daqui para isso.
+      if (!info) return path;
+      if (!info.isSymbolicLink()) continue;
+      const to = await readlink(step).catch(() => null);
+      if (to === null) return null;
+      next = join(resolve(dirname(step), to), ...parts.slice(depth));
+    }
+    if (!next) return path;
+    target = next;
+  }
+  return null;
+}
+
+/** Arquivos por chamada do lsof: a linha de comando tem limite, e um repositório tem centenas de blobs. */
+export const LSOF_BATCH = 200;
+
+/**
+ * Quais dos arquivos algum processo vivo tem abertos ou mapeados. É assim que o MLX, o llama.cpp e
+ * o transformers seguram um peso, e os argumentos citam o id do repositório, não o caminho. O lsof
+ * devolve o inode, que bate mesmo quando o processo abriu pelo link de snapshots/. Nulo quando não
+ * deu para saber: sem a lista de processos, código que não é 0 (achou) nem 1 (faltou algum), tempo
+ * esgotado, ou arquivo que ele não conseguiu examinar.
+ */
+async function openFiles(ctx: AiContext, files: readonly string[]): Promise<Set<string> | null> {
+  if (!ctx.processesKnown) return null;
+  const byInode = new Map<string, string[]>();
+  for (const file of new Set(files)) {
+    const info = await lstat(file, { bigint: true }).catch(() => null);
+    // Sumiu desde a listagem: ninguém o segura.
+    if (!info?.isFile()) continue;
+    byInode.set(String(info.ino), [...(byInode.get(String(info.ino)) ?? []), file]);
+  }
+  const names = [...byInode.values()].flat();
+  const open = new Set<string>();
+  for (let start = 0; start < names.length; start += LSOF_BATCH) {
+    // Sem -b: com ele o lsof não examina os nomes e responde que ninguém abriu nada.
+    const { code, stdout, stderr } = await ctx.exec('/usr/sbin/lsof', ['-w', '-nP', '-Fpi', '--', ...names.slice(start, start + LSOF_BATCH)], {
+      timeoutMs: 20_000,
+    });
+    if (code !== 0 && code !== 1) return null;
+    if (/^lsof: status error on .*: (?!No such file or directory$)/m.test(stderr)) return null;
+    let fds = 0;
+    let inodes = 0;
+    for (const line of stdout.split('\n')) {
+      if (line.startsWith('f')) fds++;
+      if (!line.startsWith('i')) continue;
+      const held = byInode.get(line.slice(1));
+      // Inode que não é de nenhum dos arquivos: trocaram o arquivo no meio, e não dá para dizer qual.
+      if (!held) return null;
+      inodes++;
+      for (const file of held) open.add(file);
+    }
+    if (inodes < fds) return null;
+  }
+  return open;
+}
+
+/** Em uso se um processo tem algum dos arquivos aberto; não conferido se o lsof não respondeu. */
+async function heldBlock(ctx: AiContext, files: readonly string[]): Promise<AiBlock | null> {
+  const open = await openFiles(ctx, files);
+  return open === null ? 'unverified' : open.size > 0 ? 'in-use' : null;
+}
+
+interface Held {
+  item: Found;
+  /** Os pesos que um processo pode estar segurando. */
+  files: string[];
+}
+
+/** Uma chamada do lsof (em lotes) para a ferramenta inteira; em uso vale mais que outro bloqueio. */
+async function markHeld(ctx: AiContext, held: readonly Held[]): Promise<Found[]> {
+  const open = await openFiles(ctx, held.flatMap((entry) => entry.files));
+  for (const { item, files } of held) {
+    if (open === null) item.blocked ??= 'unverified';
+    else if (files.some((file) => open.has(file))) item.blocked = 'in-use';
+  }
+  return held.map((entry) => entry.item);
+}
+
+/** Os arquivos da pasta (sem descer) cujo nome casa com o padrão. */
+async function filesIn(dir: string, pattern: RegExp = /./): Promise<string[]> {
+  return (await list(dir)).filter((entry) => entry.isFile() && pattern.test(entry.name)).map((entry) => join(dir, entry.name));
+}
+
 type Closed = Pick<Found, 'blocked' | 'recheck'>;
 
 /** O app guarda estado aberto sobre os arquivos: só saem com ele fechado, conferido de novo na hora. */
@@ -59,7 +183,10 @@ function whenClosed(ctx: AiContext, exe: RegExp): Closed {
 
 type ModelFields = Pick<Found, 'label' | 'path' | 'size' | 'count' | 'lastUsed'> & Partial<Found>;
 
-/** Modelo baixado: sai para a Lixeira e a ferramenta baixa de novo quando precisar. */
+/** Quem baixa o modelo de novo sozinho, na próxima vez que o código pedir. LM Studio, Jan, GPT4All e Ollama esperam a pessoa baixar. */
+const REDOWNLOADS: ReadonlySet<AiToolId> = new Set(['hugging-face', 'rembg', 'torch', 'whisper']);
+
+/** Modelo baixado: sai para a Lixeira, e usar de novo pede outro download. */
 function modelItem(tool: AiToolId, fields: ModelFields): Found {
   return {
     tool,
@@ -67,27 +194,18 @@ function modelItem(tool: AiToolId, fields: ModelFields): Found {
     project: null,
     safety: 'moderate',
     removal: 'trash',
-    hint: 'redownload',
+    ...(REDOWNLOADS.has(tool) ? { hint: 'redownload' as const } : {}),
     confidence: 'low',
     ...fields,
   };
 }
 
-/**
- * A Lixeira só aceita o que está na conta (é o que o scanner confere por último). Modelo num
- * disco externo, apontado por variável ou configuração, fica só para ver.
- */
-function insideAccount(ctx: AiContext, item: Found): Found {
-  if ((item.paths ?? [item.path]).every((path) => path.startsWith(ctx.home + '/'))) return item;
-  const shown: Found = { ...item, removal: 'none', blocked: item.blocked ?? 'via-app' };
-  delete shown.remove;
-  return shown;
-}
-
 function collector(id: AiToolId, collect: (ctx: AiContext) => Promise<Found[]>): Collector {
   return {
     id,
-    collect: async (ctx) => (await collect(ctx)).filter((item) => item.size > 0).map((item) => insideAccount(ctx, item)),
+    // Rede de segurança: as pastas já passaram pelo modelDir, e nada de fora delas é oferecido.
+    collect: async (ctx) =>
+      (await collect(ctx)).filter((item) => item.size > 0 && (item.paths ?? [item.path]).every((path) => readableDir(ctx, path))),
   };
 }
 
@@ -95,10 +213,11 @@ function collector(id: AiToolId, collect: (ctx: AiContext) => Promise<Found[]>):
 
 const LM_STUDIO = /\/LM Studio\.app\/Contents\/|(^|\/)(llmster|lms)$/;
 
-async function lmStudioRoot(ctx: AiContext): Promise<string> {
+/** Nula quando a pasta do app está onde não se lê: sem o registro de cargas, nada do LM Studio entra. */
+async function lmStudioRoot(ctx: AiContext): Promise<string | null> {
   // Quem move a pasta do LM Studio deixa o novo lugar neste ponteiro.
   const pointer = (await readFile(join(ctx.home, '.lmstudio-home-pointer'), 'utf8').catch(() => '')).trim();
-  return pointer.startsWith('/') ? resolve(pointer) : join(ctx.home, '.lmstudio');
+  return modelDir(ctx, pointer.startsWith('/') ? resolve(pointer) : join(ctx.home, '.lmstudio'));
 }
 
 async function lmStudioModelRoots(ctx: AiContext, root: string): Promise<string[]> {
@@ -106,9 +225,17 @@ async function lmStudioModelRoots(ctx: AiContext, root: string): Promise<string[
   const settings = await readJson(join(root, 'settings.json'));
   const folder = isRecord(settings) ? settings.downloadsFolder : null;
   const chosen = typeof folder === 'string' && folder.startsWith('/') ? resolve(folder) : join(root, 'models');
+  const roots: string[] = [];
   // A pasta das versões anteriores à 0.3, que pode ter ficado sem migrar.
-  return [...new Set([chosen, join(ctx.home, '.cache/lm-studio/models')])];
+  for (const dir of new Set([chosen, join(ctx.home, '.cache/lm-studio/models')])) {
+    const readable = await modelDir(ctx, dir);
+    if (readable) roots.push(readable);
+  }
+  return roots;
 }
+
+/** O que o LM Studio carrega: GGUF (llama.cpp) ou safetensors (MLX). */
+const LM_STUDIO_WEIGHT = /\.(gguf|safetensors)$/i;
 
 /** Os pares do model-data.json, que o LM Studio grava em superjson: `json` é a lista de um Map. */
 function superjsonPairs(data: unknown): Array<[string, unknown]> {
@@ -164,7 +291,7 @@ async function lmStudioLoads(root: string): Promise<Map<string, number>> {
 
 async function lmStudioModels(ctx: AiContext, root: string, closed: Closed): Promise<Found[]> {
   const loads = await lmStudioLoads(root);
-  const items: Found[] = [];
+  const held: Held[] = [];
   for (const models of await lmStudioModelRoots(ctx, root)) {
     for (const publisher of await list(models)) {
       if (!publisher.isDirectory() || publisher.name.startsWith('.')) continue;
@@ -172,25 +299,30 @@ async function lmStudioModels(ctx: AiContext, root: string, closed: Closed): Pro
         if (!model.isDirectory() || model.name.startsWith('.')) continue;
         // A pasta inteira: o GGUF e o mmproj andam juntos, e um sem o outro não carrega.
         const path = join(models, publisher.name, model.name);
+        // Sem peso não é modelo: a pasta escolhida pode ser comum (~/AI com as saídas do ComfyUI),
+        // e qualquer subpasta viraria "baixa de novo".
+        const weights = await filesIn(path, LM_STUDIO_WEIGHT);
+        if (weights.length === 0) continue;
         const { size, newest, files } = await ctx.measure(path);
         const loaded = loads.get(`${publisher.name}/${model.name}`.toLowerCase()) ?? 0;
         // Sem registro de carga o app nunca abriu o modelo: sobra a data do download.
-        items.push(
-          modelItem('lm-studio', {
-            label: `${publisher.name}/${model.name}`,
-            path,
-            size,
-            count: files,
-            lastUsed: Math.max(loaded, newest),
-            confidence: loaded > 0 && loaded >= newest ? 'high' : 'low',
-            ...(loaded === 0 ? { hint: 'never-loaded' as const } : {}),
-            ...closed,
-          })
-        );
+        const item = modelItem('lm-studio', {
+          label: `${publisher.name}/${model.name}`,
+          path,
+          size,
+          count: files,
+          lastUsed: Math.max(loaded, newest),
+          confidence: loaded > 0 && loaded >= newest ? 'high' : 'low',
+          ...(loaded === 0 ? { hint: 'never-loaded' as const } : {}),
+          ...closed,
+        });
+        // Com o app fechado, outro programa (llama.cpp, um script) pode ter o peso mapeado.
+        item.recheck = async (now) => (await closed.recheck?.(now)) ?? heldBlock(now, await filesIn(path, LM_STUDIO_WEIGHT));
+        held.push({ item, files: weights });
       }
     }
   }
-  return items;
+  return markHeld(ctx, held);
 }
 
 interface Runtime {
@@ -282,6 +414,7 @@ async function lmStudioRuntimes(ctx: AiContext, root: string, closed: Closed): P
 
 const lmStudio = collector('lm-studio', async (ctx) => {
   const root = await lmStudioRoot(ctx);
+  if (!root) return [];
   const closed = whenClosed(ctx, LM_STUDIO);
   return [...(await lmStudioModels(ctx, root, closed)), ...(await lmStudioRuntimes(ctx, root, closed))];
 });
@@ -301,14 +434,8 @@ async function firstExecutable(paths: readonly string[]): Promise<string | null>
   return null;
 }
 
-async function ollamaModelsDir(ctx: AiContext): Promise<string> {
-  const fromEnv = envDir(ctx, 'OLLAMA_MODELS');
-  if (fromEnv) return fromEnv;
-  // O app da barra de menus herda as variáveis do launchd, não as do terminal.
-  const launchd = await ctx.exec('/bin/launchctl', ['getenv', 'OLLAMA_MODELS'], { timeoutMs: 5_000 });
-  const value = launchd.code === 0 ? launchd.stdout.trim() : '';
-  return value.startsWith('/') ? resolve(value) : join(ctx.home, '.ollama/models');
-}
+/** O ctx.env já traz o OLLAMA_MODELS do launchd, que é de onde o app da barra de menus herda. */
+const ollamaModelsDir = (ctx: AiContext) => modelDir(ctx, envDir(ctx, 'OLLAMA_MODELS') ?? join(ctx.home, '.ollama/models'));
 
 /** O nome que o `ollama ls` mostra e o `ollama rm` aceita, de manifests/<registro>/<espaço>/<modelo>/<tag>. */
 export function ollamaName([registry, space, model, tag]: string[]): string {
@@ -383,7 +510,8 @@ function logTime(line: string): number {
  */
 async function ollamaLoads(ctx: AiContext): Promise<Map<string, number>> {
   const loads = new Map<string, number>();
-  const logs = join(ctx.home, '.ollama/logs');
+  const logs = await modelDir(ctx, join(ctx.home, '.ollama/logs'));
+  if (!logs) return loads;
   for (const entry of await list(logs)) {
     if (!entry.isFile() || !/^server(-\d+)?\.log$/.test(entry.name)) continue;
     for (const line of (await tail(join(logs, entry.name), LOG_TAIL_BYTES)).split('\n')) {
@@ -406,6 +534,7 @@ async function ollamaLoads(ctx: AiContext): Promise<Map<string, number>> {
 export function ollamaCollector(binaries: readonly string[] = OLLAMA_BINARIES): Collector {
   return collector('ollama', async (ctx) => {
     const root = await ollamaModelsDir(ctx);
+    if (!root) return [];
     const manifests = await ollamaManifests(root);
     if (manifests.length === 0) return [];
     // Tags com as mesmas camadas são um modelo só com dois nomes (llama3 e llama3:8b). Contadas
@@ -421,10 +550,12 @@ export function ollamaCollector(binaries: readonly string[] = OLLAMA_BINARIES): 
     }
     const [binary, loads] = await Promise.all([firstExecutable(binaries), ollamaLoads(ctx)]);
 
-    const items: Found[] = [];
+    const held: Held[] = [];
     for (const tags of models.values()) {
       tags.sort((a, b) => a.name.localeCompare(b.name));
       const names = tags.map((tag) => tag.name);
+      // Modelo carregado fica mapeado pelo runner, e os argumentos dele nem sempre citam o blob.
+      const blobs = tags[0].blobs.map((blob) => join(root, 'blobs', blob));
       // Camada que outro modelo também usa continua no disco depois do rm: não conta.
       const own = tags[0].blobs.filter((blob) => users.get(blob) === 1).map((blob) => join(root, 'blobs', blob));
       let size = 0;
@@ -450,7 +581,7 @@ export function ollamaCollector(binaries: readonly string[] = OLLAMA_BINARIES): 
         item.removal = 'command';
         // O `ollama rm` pede ao servidor que apague: com ele parado, não sai nada.
         if (!ollamaServing(ctx)) item.blocked = 'app-closed';
-        item.recheck = async (now) => (ollamaServing(now) ? null : 'app-closed');
+        item.recheck = async (now) => (ollamaServing(now) ? heldBlock(now, blobs) : 'app-closed');
         item.remove = async (now) => {
           for (const name of names) {
             const result = await now.exec(binary, ['rm', name], { timeoutMs: 120_000 });
@@ -462,9 +593,9 @@ export function ollamaCollector(binaries: readonly string[] = OLLAMA_BINARIES): 
         item.blocked = 'via-app';
         item.hint = 'tool-command';
       }
-      items.push(item);
+      held.push({ item, files: blobs });
     }
-    return items;
+    return markHeld(ctx, held);
   });
 }
 
@@ -492,14 +623,16 @@ async function liveDownload(ctx: AiContext, blobs: string): Promise<boolean> {
  * é só o de blobs/, porque snapshots/ são links. Parcial (*.incomplete) parado é lixo à parte;
  * mexido há pouco, é um download em andamento e segura o repositório.
  */
-async function hfRepo(ctx: AiContext, repo: string, type: string, label: string): Promise<Found[]> {
+async function hfRepo(ctx: AiContext, repo: string, type: string, label: string): Promise<Held[]> {
   const blobs = join(repo, 'blobs');
+  const entries = await list(blobs);
+  const all = entries.filter((entry) => entry.isFile()).map((entry) => join(blobs, entry.name));
   const orphans: Array<{ path: string; size: number; newest: number }> = [];
   let size = 0;
   let count = 0;
   let downloaded = 0;
   let live = false;
-  for (const entry of await list(blobs)) {
+  for (const entry of entries) {
     const path = join(blobs, entry.name);
     const measured = await ctx.measure(path);
     if (entry.name.endsWith('.incomplete')) {
@@ -514,9 +647,11 @@ async function hfRepo(ctx: AiContext, repo: string, type: string, label: string)
     downloaded = Math.max(downloaded, measured.newest);
   }
   const snapshots = await ctx.measure(join(repo, 'snapshots'));
-  const recheck = async (now: AiContext): Promise<AiBlock | null> => ((await liveDownload(now, blobs)) ? 'in-use' : null);
+  // Download em andamento, ou um processo com algum dos arquivos aberto, na hora de remover.
+  const recheck = (held: () => Promise<string[]>) => async (now: AiContext): Promise<AiBlock | null> =>
+    (await liveDownload(now, blobs)) ? 'in-use' : heldBlock(now, await held());
 
-  const items: Found[] = [];
+  const items: Held[] = [];
   if (size > 0) {
     // Com parcial parado dentro, o repositório sai por partes, para o parcial ser um item à parte.
     const parts = orphans.length
@@ -527,53 +662,60 @@ async function hfRepo(ctx: AiContext, repo: string, type: string, label: string)
             .filter((path) => !orphans.some((orphan) => orphan.path === path)),
         ]
       : undefined;
-    items.push(
-      modelItem('hugging-face', {
-        kind: type === 'models' || type === 'kernels' ? 'model' : 'cache',
-        label,
-        path: repo,
-        ...(parts ? { paths: parts } : {}),
-        size,
-        count,
-        lastUsed: Math.max(downloaded, snapshots.newest),
-        ...(live ? { blocked: 'in-use' as const } : {}),
-        recheck,
-      })
-    );
+    // O blob é o arquivo de verdade: quem abre pelo link de snapshots/ aparece no lsof com ele.
+    const item = modelItem('hugging-face', {
+      kind: type === 'models' || type === 'kernels' ? 'model' : 'cache',
+      label,
+      path: repo,
+      ...(parts ? { paths: parts } : {}),
+      size,
+      count,
+      lastUsed: Math.max(downloaded, snapshots.newest),
+      ...(live ? { blocked: 'in-use' as const } : {}),
+      recheck: recheck(() => filesIn(blobs)),
+    });
+    items.push({ item, files: all });
   }
   const partial = orphans.reduce((sum, orphan) => sum + orphan.size, 0);
   if (partial > 0) {
-    items.push({
+    const files = orphans.map((orphan) => orphan.path);
+    const item: Found = {
       tool: 'hugging-face',
       kind: 'cache',
       label,
       project: null,
       path: blobs,
-      paths: orphans.map((orphan) => orphan.path),
+      paths: files,
       size: partial,
       count: orphans.length,
       lastUsed: Math.max(...orphans.map((orphan) => orphan.newest)),
       junk: 'orphan',
       safety: 'safe',
       removal: 'trash',
-      recheck,
-    });
+      // Parado há uma hora, mas ainda aberto: o download travou sem morrer.
+      recheck: recheck(async () => files),
+    };
+    items.push({ item, files });
   }
   return items;
 }
 
 const huggingFace = collector('hugging-face', async (ctx) => {
   const home = hfHome(ctx);
-  const hub = envDir(ctx, 'HF_HUB_CACHE') ?? envDir(ctx, 'HUGGINGFACE_HUB_CACHE') ?? join(home, 'hub');
-  const items: Found[] = [];
-  for (const entry of await list(hub)) {
-    const match = HF_REPO.exec(entry.name);
-    if (entry.isDirectory() && match) {
-      items.push(...(await hfRepo(ctx, join(hub, entry.name), match[1], match[2].split('--').join('/'))));
+  const hub = await modelDir(ctx, envDir(ctx, 'HF_HUB_CACHE') ?? envDir(ctx, 'HUGGINGFACE_HUB_CACHE') ?? join(home, 'hub'));
+  const held: Held[] = [];
+  if (hub) {
+    for (const entry of await list(hub)) {
+      const match = HF_REPO.exec(entry.name);
+      if (entry.isDirectory() && match) {
+        held.push(...(await hfRepo(ctx, join(hub, entry.name), match[1], match[2].split('--').join('/'))));
+      }
     }
   }
+  const items = await markHeld(ctx, held);
   // Shards e staging do hf_xet: a própria documentação manda apagar a pasta para recuperar espaço.
-  const xet = envDir(ctx, 'HF_XET_CACHE') ?? join(home, 'xet');
+  const xet = await modelDir(ctx, envDir(ctx, 'HF_XET_CACHE') ?? join(home, 'xet'));
+  if (!xet) return items;
   const measured = await ctx.measure(xet);
   items.push({
     tool: 'hugging-face',
@@ -614,7 +756,8 @@ async function janModelFolders(root: string): Promise<string[]> {
 }
 
 const jan = collector('jan', async (ctx) => {
-  const data = join(ctx.home, 'Library/Application Support/Jan/data');
+  const data = await modelDir(ctx, join(ctx.home, 'Library/Application Support/Jan/data'));
+  if (!data) return [];
   const closed = whenClosed(ctx, JAN);
   const items: Found[] = [];
   for (const engine of ['llamacpp', 'mlx']) {
@@ -627,20 +770,27 @@ const jan = collector('jan', async (ctx) => {
   return items;
 });
 
-async function gpt4allModels(ctx: AiContext): Promise<string> {
+/** A pasta de modelos do GPT4All e o que conta como peso nela; nula quando a escolhida não se lê. */
+async function gpt4allModels(ctx: AiContext): Promise<{ dir: string; weight: RegExp } | null> {
   // Do GPT4All.ini só a linha da pasta de modelos.
   const ini = await readFile(join(ctx.home, '.config/gpt4all.io/GPT4All.ini'), 'utf8').catch(() => '');
   const custom = /^modelPath=(.+)$/m.exec(ini)?.[1].trim().replace(/^"(.*)"$/, '$1');
-  return custom?.startsWith('/') ? resolve(custom) : join(ctx.home, 'Library/Application Support/nomic.ai/GPT4All');
+  const standard = join(ctx.home, 'Library/Application Support/nomic.ai/GPT4All');
+  const dir = await modelDir(ctx, custom?.startsWith('/') ? resolve(custom) : standard);
+  if (!dir) return null;
+  // O .bin dos modelos ggml antigos só vale na pasta do app: numa pasta comum é de qualquer coisa.
+  return { dir, weight: dir === standard ? /\.(gguf|bin)$/i : /\.gguf$/i };
 }
 
 /** Os chats (gpt4all-*.chat) e o banco do LocalDocs moram na mesma pasta: só os pesos entram. */
 const gpt4all = collector('gpt4all', async (ctx) => {
-  const dir = await gpt4allModels(ctx);
+  const models = await gpt4allModels(ctx);
+  if (!models) return [];
+  const { dir, weight } = models;
   const closed = whenClosed(ctx, GPT4ALL);
   const items: Found[] = [];
   for (const entry of await list(dir)) {
-    if (!entry.isFile() || !/\.(gguf|bin)$/i.test(entry.name)) continue;
+    if (!entry.isFile() || !weight.test(entry.name)) continue;
     const path = join(dir, entry.name);
     const { size, newest } = await ctx.measure(path);
     if (entry.name.startsWith('incomplete-')) {
@@ -746,6 +896,7 @@ const chromeAi = collector('chrome-ai', async (ctx) => {
 /** Um arquivo por modelo, sem registro de uso: o mtime é a data do download. */
 async function looseModels(ctx: AiContext, tool: AiToolId, dir: string, pattern: RegExp): Promise<Found[]> {
   const items: Found[] = [];
+  if (!(await modelDir(ctx, dir))) return items;
   for (const entry of await list(dir)) {
     if (!entry.isFile() || !pattern.test(entry.name)) continue;
     const path = join(dir, entry.name);
@@ -764,7 +915,8 @@ const whisper = collector('whisper', (ctx) => looseModels(ctx, 'whisper', join(c
 /** Pesos em hub/checkpoints e, ao lado, o código de cada repositório que o torch.hub baixou. */
 const torch = collector('torch', async (ctx) => {
   const torchHome = envDir(ctx, 'TORCH_HOME');
-  const hub = torchHome ? join(torchHome, 'hub') : join(cacheHome(ctx), 'torch/hub');
+  const hub = await modelDir(ctx, torchHome ? join(torchHome, 'hub') : join(cacheHome(ctx), 'torch/hub'));
+  if (!hub) return [];
   const items = await looseModels(ctx, 'torch', join(hub, 'checkpoints'), /^[^.]/);
   for (const entry of await list(hub)) {
     if (!entry.isDirectory() || entry.name === 'checkpoints' || entry.name.startsWith('.')) continue;

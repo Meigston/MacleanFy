@@ -377,6 +377,7 @@ describe('agentCollectors', () => {
       await put(join(dir, 'package.json'), json({ dependencies: { [name]: `^${version}` }, _npx: { packages: [spec] } }), daysAgo);
       await put(join(dir, 'node_modules', name, 'package.json'), json({ name, version }), daysAgo);
       await put(join(dir, 'node_modules', name, 'index.js'), 20_000, daysAgo);
+      await age(join(dir, 'node_modules'), daysAgo);
       await age(dir, daysAgo);
       return dir;
     }
@@ -387,6 +388,8 @@ describe('agentCollectors', () => {
       const other = await entry('a3241bba59c344f5', '@modelcontextprotocol/server-filesystem', '2025.8.21', '@modelcontextprotocol/server-filesystem', 360);
       const broken = join(root(), 'e41f203b7505f1fb');
       await put(join(broken, 'node_modules/.package-lock.json'), 5000, 50);
+      await age(join(broken, 'node_modules'), 50);
+      await age(broken, 50);
       await mkdir(join(root(), 'beb367dfa21eb3f5'));
 
       const items = await collect('npx', { ...box });
@@ -398,6 +401,33 @@ describe('agentCollectors', () => {
       expect(byPath.get(other)!.junk).toBeUndefined();
       expect(byPath.get(broken)).toMatchObject({ junk: 'orphan', label: 'e41f203b7505f1fb' });
       expect(byPath.get(old)!.lastUsed).toBeLessThan(byPath.get(current)!.lastUsed);
+    });
+
+    it('blocks an entry touched in the last hour as a possible install in progress, and checks again before removing', async () => {
+      const minutes = (n: number) => n / (24 * 60);
+      // O npm já criou a pasta e o node_modules, mas o package.json só vem no fim da instalação.
+      const installing = join(root(), '8b1e0c2f3a4d5e6f');
+      await put(join(installing, 'node_modules/@bytebase/dbhub/index.js'), 20_000, minutes(10));
+      await age(join(installing, 'node_modules'), minutes(10));
+      await age(installing, minutes(10));
+      const stale = join(root(), 'e41f203b7505f1fb');
+      await put(join(stale, 'node_modules/.package-lock.json'), 5000, 50);
+      await age(join(stale, 'node_modules'), 50);
+      await age(stale, 50);
+
+      const items = await collect('npx', { ...box });
+      const byPath = new Map(items.map((i) => [i.path, i]));
+      expect(byPath.get(installing)).toMatchObject({ blocked: 'recent' });
+      expect(byPath.get(installing)!.junk).toBeUndefined();
+      expect(byPath.get(stale)).toMatchObject({ junk: 'orphan' });
+      expect(byPath.get(stale)!.blocked).toBeUndefined();
+
+      const later = fakeContext({ ...box });
+      expect(await byPath.get(stale)!.recheck!(later)).toBeNull();
+      // O npx voltou a instalar os mesmos pacotes na pasta parada: o npm 11 segura o lock enquanto isso.
+      await mkdir(join(stale, 'concurrency.lock'));
+      await age(join(stale, 'concurrency.lock'), minutes(1));
+      expect(await byPath.get(stale)!.recheck!(later)).toBe('recent');
     });
 
     it('keeps an old version that an MCP configuration pins, and never keeps the other arguments', async () => {

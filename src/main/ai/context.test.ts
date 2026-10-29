@@ -176,24 +176,40 @@ describe('with files', () => {
     it('joins live sessions, transcripts, jobs and VS Code workspaces, without the home folder', async () => {
       const claude = join(box.home, '.claude');
       const projects = join(claude, 'projects');
+      const code = join(box.home, 'code');
+      const line = (cwd: string) => JSON.stringify({ cwd }) + '\n';
       // A mais nova não tem cwd; vale a próxima da mesma pasta.
       await put(join(projects, '-code-app', 'new.jsonl'), JSON.stringify({ type: 'summary' }) + '\n', 1);
-      await put(join(projects, '-code-app', 'old.jsonl'), JSON.stringify({ cwd: '/code/app' }) + '\n', 5);
-      await put(join(projects, '-code-api', 'a.jsonl'), JSON.stringify({ cwd: '/code/api' }) + '\n', 2);
-      await put(join(projects, '-code-api', 'b.jsonl'), JSON.stringify({ cwd: '/code/api-other' }) + '\n', 3);
+      await put(join(projects, '-code-app', 'old.jsonl'), line(join(code, 'app')), 5);
+      await put(join(projects, '-code-api', 'a.jsonl'), line(join(code, 'api')), 2);
+      await put(join(projects, '-code-api', 'b.jsonl'), line(join(code, 'api-other')), 3);
       await put(join(projects, '-code-only-memory', 'memory', 'MEMORY.md'), 'notes');
-      await put(join(projects, '-home', 'h.jsonl'), JSON.stringify({ cwd: box.home }) + '\n');
-      await put(join(claude, 'jobs', 'j1', 'state.json'), JSON.stringify({ cwd: '/code/job' }));
+      await put(join(projects, '-home', 'h.jsonl'), line(box.home));
+      await put(join(claude, 'jobs', 'j1', 'state.json'), JSON.stringify({ cwd: join(code, 'job') }));
       await put(join(claude, 'jobs', 'j2', 'state.json'), JSON.stringify({ cwd: 'relative' }));
       await put(join(claude, 'jobs', 'pins.json'), '[]');
       const workspaces = join(box.home, 'Library/Application Support/Code/User/workspaceStorage');
-      await put(join(workspaces, 'w1', 'workspace.json'), JSON.stringify({ folder: 'file:///code/vs%20code' }));
+      await put(join(workspaces, 'w1', 'workspace.json'), JSON.stringify({ folder: `file://${code}/vs%20code` }));
       await put(join(workspaces, 'w2', 'workspace.json'), JSON.stringify({ folder: 'vscode-remote://ssh-remote+box/code' }));
-      await put(join(workspaces, 'w3', 'workspace.json'), JSON.stringify({ workspace: 'file:///code/x.code-workspace' }));
+      await put(join(workspaces, 'w3', 'workspace.json'), JSON.stringify({ workspace: `file://${code}/x.code-workspace` }));
+      // Projetos no iCloud, num disco externo ou fora da conta não são lidos.
+      await put(join(workspaces, 'w4', 'workspace.json'), JSON.stringify({ folder: `file://${box.home}/Library/CloudStorage/OneDrive/p` }));
+      await put(join(workspaces, 'w5', 'workspace.json'), JSON.stringify({ folder: 'file:///Volumes/NAS/p' }));
+      for (const name of ['app', 'api', 'job', 'vs code']) await put(join(code, name, '.git', 'HEAD'), 'ref: refs/heads/main');
 
-      const found = await discoverProjects(box.home, claude, [{ pid: 1, sessionId: 's', cwd: '/live/proj' }]);
+      const found = await discoverProjects(box.home, claude, [{ pid: 1, sessionId: 's', cwd: join(box.home, 'live/proj') }]);
 
-      expect(found).toEqual(['/code/api', '/code/app', '/code/job', '/code/vs code', '/live/proj']);
+      expect(found).toEqual([...['api', 'app', 'job', 'vs code'].map((name) => join(code, name)), join(box.home, 'live/proj')]);
+    });
+
+    it('adds the repositories inside a folder that only gathers them', async () => {
+      const claude = join(box.home, '.claude');
+      const repos = join(box.home, 'Repositorios');
+      await put(join(claude, 'projects', '-r', 'a.jsonl'), JSON.stringify({ cwd: repos }) + '\n');
+      await put(join(repos, 'one', '.git', 'HEAD'), 'ref: refs/heads/main');
+      await put(join(repos, 'notes', 'todo.md'), 'x');
+
+      expect(await discoverProjects(box.home, claude, [])).toEqual([repos, join(repos, 'one')]);
     });
 
     it('gives nothing when no tool left a trace', async () => {

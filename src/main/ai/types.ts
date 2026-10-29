@@ -38,6 +38,8 @@ export interface AiContext {
   /** As variáveis que mudam onde as ferramentas guardam as coisas (CLAUDE_CONFIG_DIR, CODEX_HOME, HF_HOME…). */
   env: Readonly<Record<string, string | undefined>>;
   processes: readonly ProcessInfo[];
+  /** Falso quando o ps ou o lsof falhou: sem saber quem roda, nada pode sair. */
+  processesKnown: boolean;
   claudeSessions: readonly LiveSession[];
   /** Pastas de projeto conhecidas: o cwd gravado nas sessões e jobs do Claude Code e nos workspaces do VS Code. */
   projects: readonly string[];

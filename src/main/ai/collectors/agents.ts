@@ -765,6 +765,22 @@ async function readNpxEntry(path: string, mtime: number): Promise<NpxEntry> {
   return { path, mtime, specs, packages, broken };
 }
 
+/** Mexida há menos disso, a entrada pode ser uma instalação do npx em andamento. */
+const NPX_SETTLE_MS = 60 * 60 * 1000;
+
+/**
+ * A última vez que o npx mexeu na entrada. Ele cria a pasta e o node_modules no começo e grava o
+ * package.json só no fim, então no meio da instalação a entrada parece quebrada; o npm 11 ainda
+ * segura um concurrency.lock que toca a cada segundo. O processo `npm exec` não cita o caminho.
+ */
+async function npxTouched(path: string): Promise<number> {
+  const marks = ['', 'package.json', 'concurrency.lock', 'node_modules', 'node_modules/.package-lock.json'];
+  const stats = await Promise.all(marks.map((mark) => stat(join(path, mark))));
+  return stats.reduce((newest, s) => Math.max(newest, s?.mtimeMs ?? 0), 0);
+}
+
+const npxRecent = async (ctx: AiContext, path: string) => ctx.now - (await npxTouched(path)) < NPX_SETTLE_MS;
+
 /** Entrada mais velha que outra com os mesmos pacotes, e que nenhuma configuração de MCP pede. */
 function oldVersions(entries: readonly NpxEntry[], configured: ReadonlySet<string>): Set<string> {
   const comparable = entries.filter((e) => !e.broken && e.packages.length > 0 && e.packages.every((p) => p.version));
@@ -794,6 +810,7 @@ const npx: Collector = {
     const entries = await mapLimit(dirs, 8, async (path) => readNpxEntry(path, (await stat(path))?.mtimeMs ?? 0));
     const old = oldVersions(entries, await mcpSpecs(ctx));
     const sizes = await mapLimit(entries, 4, (entry) => ctx.du(entry.path));
+    const recent = await mapLimit(entries, 8, (entry) => npxRecent(ctx, entry.path));
 
     return entries
       .map((entry, i): Found => {
@@ -812,8 +829,12 @@ const npx: Collector = {
           safety: 'safe',
           removal: 'trash',
           hint: 'redownload',
+          // Uma entrada quebrada e parada pode voltar a ser preenchida: o npx reusa a pasta dos mesmos pacotes.
+          recheck: async (now) => ((await npxRecent(now, entry.path)) ? 'recent' : null),
         };
-        if (entry.broken) item.junk = 'orphan';
+        // Recém-mexida não é lixo: pode ser a instalação que está subindo um servidor MCP.
+        if (recent[i]) item.blocked = 'recent';
+        else if (entry.broken) item.junk = 'orphan';
         else if (old.has(entry.path)) item.junk = 'old-version';
         return item;
       })

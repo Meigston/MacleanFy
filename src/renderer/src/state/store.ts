@@ -16,7 +16,7 @@ import type {
   UpdateState,
 } from '../../../shared/api';
 import { initialLocale, persistLocale, type Locale } from '../i18n/locale';
-import { isRemovable } from '../lib/ai';
+import { isRemovable, isSurelyCold } from '../lib/ai';
 import { ALL_CATEGORY_IDS, type GroupRoute } from '../lib/catalog';
 
 export type Route =
@@ -110,10 +110,10 @@ interface State {
   loadAi(): Promise<void>;
   toggleAiItem(id: string): void;
   setAiSelected(ids: readonly string[], selected: boolean): void;
-  /** Marca o que está frio e pode sair; com `ids`, só entre eles (o que o filtro mostra). */
+  /** Marca o que se sabe frio e pode sair; com `ids`, só entre eles (o que o filtro mostra). */
   selectColdAi(ids?: readonly string[]): void;
   clearAiSelection(): void;
-  removeAiSelected(): Promise<AiRemoveResultDTO>;
+  removeAiSelected(): Promise<AiRemoveOutcome>;
 }
 
 /**
@@ -126,12 +126,12 @@ function defaultSelection(result: ScanResultDTO): ReadonlySet<string> {
   return preselected ? new Set(result.items.map((item) => item.path)) : new Set();
 }
 
-/** Quem estava em uso quando a remoção conferiu de novo é quente, como na análise. */
-const LIVE_FAILURES = new Set(['in-use', 'live-session']);
-
 let subscribed = false;
 /** Versão que já teve o aviso aberto nesta sessão: fechar com "Depois" vale até o app reabrir. */
 let promptedVersion: string | null = null;
+
+/** O resultado da remoção; `error` quando ela nem respondeu, e não se sabe o que saiu. */
+export type AiRemoveOutcome = AiRemoveResultDTO & { error?: true };
 
 export const useStore = create<State>((set, get) => ({
   locale: initialLocale(),
@@ -329,7 +329,7 @@ export const useStore = create<State>((set, get) => ({
     const scope = ids ? new Set(ids) : null;
     const next = new Set(get().aiSelection);
     for (const item of get().ai?.items ?? []) {
-      if (item.heat === 'cold' && isRemovable(item) && (!scope || scope.has(item.id))) next.add(item.id);
+      if (isSurelyCold(item) && (!scope || scope.has(item.id))) next.add(item.id);
     }
     set({ aiSelection: next });
   },
@@ -340,10 +340,17 @@ export const useStore = create<State>((set, get) => ({
 
   async removeAiSelected() {
     const chosen = get().aiSelection;
-    const result = await window.macleanfy.ai.remove([...chosen]);
+    let result: AiRemoveResultDTO;
+    try {
+      result = await window.macleanfy.ai.remove([...chosen]);
+    } catch {
+      // Sem resposta, não se sabe o que saiu: a lista e a marcação ficam como estão, e o diálogo
+      // mostra a falha em vez de voltar calado para a confirmação.
+      return { removed: 0, freedSpace: 0, failed: [...chosen].map((id) => ({ id })), error: true };
+    }
     const failed = new Map(result.failed.map((entry) => [entry.id, entry.blocked]));
     // O que saiu some da lista na hora; refazer a análise levaria dezenas de segundos.
-    // O que ficou mostra o motivo que a nova conferência deu.
+    // O que ficou mostra o motivo que a nova conferência deu; o selo e o calor saem dele (lib/ai).
     set((state) => {
       if (!state.ai) return { aiSelection: new Set() };
       const items = state.ai.items.flatMap((item) => {
@@ -351,7 +358,7 @@ export const useStore = create<State>((set, get) => ({
         if (!failed.has(item.id)) return [];
         const blocked = failed.get(item.id);
         if (!blocked) return [item];
-        return [{ ...item, blocked, heat: LIVE_FAILURES.has(blocked) ? ('hot' as const) : item.heat }];
+        return [{ ...item, blocked }];
       });
       return { ai: { ...state.ai, items }, aiSelection: new Set() };
     });

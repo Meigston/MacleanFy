@@ -16,6 +16,7 @@ import {
   type StartupItemDTO,
   type SystemInfo,
 } from '../shared/api';
+import { COLLECTORS } from './ai/collectors';
 import { getSystemInfo } from './system';
 
 /**
@@ -450,7 +451,7 @@ function aiFixtures(lang: Lang): AiItemDTO[] {
     { tool: 'claude-code', kind: 'sessions', label: 'loja-online', project: loja, path: encoded(loja), key: 'cold', size: 186 * MB, count: 41, days: 23, safety: 'moderate', removal: 'trash', hint: 'cleanup-period' },
     { tool: 'claude-code', kind: 'sessions', label: 'loja-online', project: loja, path: encoded(loja), key: 'hot', size: 38 * MB, count: 6, days: 1, safety: 'moderate', removal: 'trash' },
     { tool: 'claude-code', kind: 'sessions', label: 'app-financas', project: financas, path: encoded(financas), key: 'cold', size: 74 * MB, count: 17, days: 12, safety: 'moderate', removal: 'trash', hint: 'cleanup-period' },
-    { tool: 'claude-code', kind: 'sessions', label: 'app-financas', project: financas, path: encoded(financas), key: 'hot', size: 12 * MB, count: 3, days: 0.01, safety: 'moderate', removal: 'none', blocked: 'live-session', live: true },
+    { tool: 'claude-code', kind: 'sessions', label: 'app-financas', project: financas, path: encoded(financas), key: 'live', size: 12 * MB, count: 3, days: 0.01, safety: 'moderate', removal: 'trash', blocked: 'live-session', live: true },
     { tool: 'claude-code', kind: 'sessions', label: 'site-pessoal', project: site, path: encoded(site), key: 'cold', size: 22 * MB, count: 9, days: 40, safety: 'moderate', removal: 'trash', hint: 'cleanup-period' },
     { tool: 'claude-code', kind: 'worktree', label: 'checkout-pix', project: loja, path: `${loja}/.claude/worktrees/checkout-pix`, size: 6.8 * GB, count: 48211, days: 18, safety: 'moderate', removal: 'git', hint: 'branch-kept' },
     { tool: 'claude-code', kind: 'worktree', label: 'frete-correios', project: loja, path: `${loja}/.claude/worktrees/frete-correios`, size: 4.1 * GB, count: 31877, days: 26, safety: 'moderate', removal: 'git', hint: 'branch-kept' },
@@ -466,9 +467,9 @@ function aiFixtures(lang: Lang): AiItemDTO[] {
     { tool: 'claude-code', kind: 'logs', label: 'mcp-logs', path: `${HOME}/Library/Caches/claude-cli-nodejs`, size: 96 * MB, count: 412, days: 14, safety: 'safe', removal: 'trash' },
     // Claude: o disco da VM do Cowork só sai pelo app.
     { tool: 'claude-desktop', kind: 'vm', label: 'Cowork', path: `${HOME}/Library/Application Support/Claude/vm_bundles`, size: 11.2 * GB, count: 1, days: 18, safety: 'moderate', removal: 'none', blocked: 'via-app', hint: 'cowork-vm' },
-    // Codex
-    { tool: 'codex', kind: 'sessions', label: 'loja-online', project: loja, path: `${HOME}/.codex/sessions`, key: 'loja', size: 64 * MB, count: 12, days: 34, safety: 'moderate', removal: 'trash' },
-    { tool: 'codex', kind: 'sessions', label: 'app-financas', project: financas, path: `${HOME}/.codex/sessions`, key: 'financas', size: 9 * MB, count: 4, days: 3, safety: 'moderate', removal: 'trash' },
+    // Codex: uma conversa gerou imagens, que saem com ela; as outras pedem para arquivar no app antes.
+    { tool: 'codex', kind: 'sessions', label: 'loja-online', project: loja, path: `${HOME}/.codex/sessions`, key: 'loja', size: 64 * MB, count: 12, days: 34, safety: 'moderate', removal: 'trash', hint: 'generated-images' },
+    { tool: 'codex', kind: 'sessions', label: 'app-financas', project: financas, path: `${HOME}/.codex/sessions`, key: 'financas', size: 9 * MB, count: 4, days: 3, safety: 'moderate', removal: 'trash', hint: 'archive-first' },
     { tool: 'codex', kind: 'cache', label: 'cache', path: `${HOME}/.codex/cache`, size: 120 * MB, count: 860, days: 16, safety: 'safe', removal: 'trash' },
     // Copilot: os chats do VS Code ficam no armazenamento de cada workspace.
     { tool: 'copilot', kind: 'sessions', label: 'loja-online', project: loja, path: `${HOME}/Library/Application Support/Code/User/workspaceStorage/4c1e9a7b/chatSessions`, size: 58 * MB, count: 22, days: 19, safety: 'moderate', removal: 'trash' },
@@ -478,11 +479,13 @@ function aiFixtures(lang: Lang): AiItemDTO[] {
     { tool: 'cursor', kind: 'leftovers', label: 'Application Support/Cursor', path: `${HOME}/Library/Application Support/Cursor`, size: 2.9 * GB, count: 1, days: 95, safety: 'moderate', removal: 'trash' },
     { tool: 'cursor', kind: 'leftovers', label: '.cursor', path: `${HOME}/.cursor`, size: 1.2 * GB, count: 1, days: 95, safety: 'moderate', removal: 'trash' },
     { tool: 'cursor', kind: 'cache', label: 'com.todesktop.230313mzl4w4u92', path: `${HOME}/Library/Caches/com.todesktop.230313mzl4w4u92.ShipIt`, size: 380 * MB, count: 1, days: 95, safety: 'safe', removal: 'trash' },
-    // LM Studio: um modelo baixado e nunca carregado, outro aberto agora.
-    { tool: 'lm-studio', kind: 'model', label: 'Qwen3.6-35B-A3B-Q4_K_M', path: `${HOME}/.lmstudio/models/lmstudio-community/Qwen3.6-35B-A3B-GGUF`, size: 19.4 * GB, count: 2, days: 188, confidence: 'low', safety: 'moderate', removal: 'trash', hint: 'redownload' },
-    { tool: 'lm-studio', kind: 'model', label: 'gemma-4-12b-it-Q4_K_M', path: `${HOME}/.lmstudio/models/lmstudio-community/gemma-4-12b-it-GGUF`, size: 7.9 * GB, count: 1, days: 0.05, safety: 'moderate', removal: 'trash', blocked: 'app-open', live: true },
-    // Hugging Face
-    { tool: 'hugging-face', kind: 'model', label: 'openai/whisper-large-v3', path: `${HOME}/.cache/huggingface/hub/models--openai--whisper-large-v3`, size: 3.1 * GB, count: 1, days: 120, safety: 'moderate', removal: 'command', hint: 'tool-command' },
+    // LM Studio: um modelo baixado e nunca carregado, outro carregado agora (o lsof o vê aberto).
+    { tool: 'lm-studio', kind: 'model', label: 'Qwen3.6-35B-A3B-Q4_K_M', path: `${HOME}/.lmstudio/models/lmstudio-community/Qwen3.6-35B-A3B-GGUF`, size: 19.4 * GB, count: 2, days: 188, confidence: 'low', safety: 'moderate', removal: 'trash', hint: 'never-loaded' },
+    { tool: 'lm-studio', kind: 'model', label: 'gemma-4-12b-it-Q4_K_M', path: `${HOME}/.lmstudio/models/lmstudio-community/gemma-4-12b-it-GGUF`, size: 7.9 * GB, count: 1, days: 0.05, safety: 'moderate', removal: 'trash', blocked: 'in-use', live: true },
+    // Ollama: sai pelo ollama rm, que apaga de vez, e não pela Lixeira.
+    { tool: 'ollama', kind: 'model', label: 'llama3.2:3b', path: `${HOME}/.ollama/models/manifests/registry.ollama.ai/library/llama3.2/3b`, size: 2.0 * GB, count: 3, days: 26, safety: 'moderate', removal: 'command', hint: 'redownload' },
+    // Hugging Face: sai pela Lixeira, e a única data é a do download.
+    { tool: 'hugging-face', kind: 'model', label: 'openai/whisper-large-v3', path: `${HOME}/.cache/huggingface/hub/models--openai--whisper-large-v3`, size: 3.1 * GB, count: 1, days: 120, confidence: 'low', safety: 'moderate', removal: 'trash', hint: 'redownload' },
     // Chrome: o Gemini Nano usado sozinho pelo alerta de golpe.
     { tool: 'chrome-ai', kind: 'model', label: 'Gemini Nano', path: `${HOME}/Library/Application Support/Google/Chrome/OptGuideOnDeviceModel/2026.8.8.1141`, size: 4.0 * GB, count: 1, days: 4, safety: 'moderate', removal: 'trash', hint: 'chrome-ai' },
     // Remotion: sobras de renders interrompidos, sem processo dono.
@@ -810,11 +813,11 @@ export function registerDemoIpc(): void {
   });
 
   handle(CHANNELS.aiScan, async (sender): Promise<AiScanDTO> => {
-    // Sete leitores, como os coletores de verdade, em uns dois segundos.
-    const total = 7;
+    // Um passo por coletor, como o scanner de verdade, em uns dois segundos.
+    const total = COLLECTORS.length;
     for (let done = 0; done <= total; done++) {
       send(sender, CHANNELS.aiProgress, { done, total });
-      if (done < total) await sleep(240 + ((done * 97) % 160));
+      if (done < total) await sleep(30 + ((done * 37) % 40));
     }
     return { scannedAt: Date.now(), items: aiItems, failed: [] };
   });

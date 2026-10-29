@@ -19,22 +19,26 @@ import {
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
-import { AI_COLD_DAYS, type AiItemDTO, type AiRemoveResultDTO } from '../../../shared/api';
+import { AI_COLD_DAYS, type AiItemDTO } from '../../../shared/api';
 import { Button, Checkbox, Modal, SafetyBadge, Spinner, shortPath, type CheckState } from '../components/ui';
 import { useT, type Translator } from '../i18n';
 import {
   AI_FAMILIES,
   AI_FAMILY_ICONS,
-  AI_KINDS,
   aiStateOf,
   aiTool,
+  heatOf,
   isInUse,
   isRemovable,
+  isSurelyCold,
+  lossesOf,
   projectName,
+  stateTipOf,
   sumSize,
+  waysOut,
   type AiState,
 } from '../lib/ai';
-import { useStore } from '../state/store';
+import { useStore, type AiRemoveOutcome } from '../state/store';
 
 type View = 'tool' | 'project';
 type Filter = 'all' | 'cold' | 'hot';
@@ -181,27 +185,29 @@ function ItemRow({ item, view, selected }: { item: AiItemDTO; view: View; select
             {when}
           </span>
         </span>
-        {item.blocked ? (
+        {item.blocked && (
           <span className="ai-item__reason ai-item__reason--blocked">
             <LockKeyhole size={11} />
             <span data-tip={t(`ai.block.${item.blocked}`)} data-tip-pos="top">
               {t(`ai.block.${item.blocked}`)}
             </span>
           </span>
-        ) : item.hint ? (
+        )}
+        {/* Com o cadeado, a hint fica: é ela que diz por onde sai (o app Claude, o ollama rm). */}
+        {item.hint && (
           <span className="ai-item__reason">
             <Info size={11} />
             <span data-tip={t(`ai.hint.${item.hint}`)} data-tip-pos="top">
               {t(`ai.hint.${item.hint}`)}
             </span>
           </span>
-        ) : null}
+        )}
       </span>
       <span className="ai-item__badges">
         {item.safety === 'moderate' && <SafetyBadge level="moderate" />}
         <span
           className={`badge ai-state ai-state--${state}`}
-          data-tip={t(`ai.state.${state}.tip`, { days: AI_COLD_DAYS })}
+          data-tip={t(stateTipOf(item), { days: AI_COLD_DAYS })}
           data-tip-pos="top"
         >
           <StateIcon size={12} />
@@ -244,7 +250,7 @@ function GroupCard({ group, view, open, onToggleOpen }: GroupCardProps) {
   const removable = group.items.filter(isRemovable);
   const chosen = removable.filter((item) => selection.has(item.id)).length;
   const state: CheckState = chosen === 0 ? 'off' : chosen === removable.length ? 'on' : 'mixed';
-  const cold = sumSize(group.items.filter((item) => item.heat === 'cold'));
+  const cold = sumSize(group.items.filter((item) => heatOf(item) === 'cold'));
   const count = tr.plural('item', group.items.length);
   const Icon = group.icon;
   const [all, setAll] = useState(false);
@@ -328,19 +334,21 @@ export function Ai() {
   const [running, setRunning] = useState(false);
   // O que foi pedido fica guardado: ao voltar da remoção, a lista do store já não tem o que saiu.
   const [asked, setAsked] = useState<AiItemDTO[] | null>(null);
-  const [result, setResult] = useState<{ dto: AiRemoveResultDTO; asked: Map<string, AiItemDTO> } | null>(null);
+  const [result, setResult] = useState<{ dto: AiRemoveOutcome; asked: Map<string, AiItemDTO> } | null>(null);
 
   const items = useMemo(() => scan?.items ?? [], [scan]);
-  const visible = useMemo(() => items.filter((item) => filter === 'all' || item.heat === filter), [items, filter]);
+  // O filtro usa o mesmo calor do selo e da barra: o que está em uso nunca aparece como frio.
+  const visible = useMemo(() => items.filter((item) => filter === 'all' || heatOf(item) === filter), [items, filter]);
   const sections = useMemo(() => groupItems(visible, view, tr), [visible, view, tr]);
 
   const totals = useMemo(() => {
     const sum = { cold: 0, hot: 0, inUse: 0, reclaim: 0, reclaimCount: 0 };
     for (const item of items) {
       if (isInUse(item)) sum.inUse += item.size;
-      else if (item.heat === 'cold') sum.cold += item.size;
+      else if (heatOf(item) === 'cold') sum.cold += item.size;
       else sum.hot += item.size;
-      if (item.heat === 'cold' && isRemovable(item)) {
+      // Dá para liberar: frio e sem bloqueio. O botão de marcar pega menos, só o que se sabe parado.
+      if (heatOf(item) === 'cold' && isRemovable(item)) {
         sum.reclaim += item.size;
         sum.reclaimCount++;
       }
@@ -350,9 +358,17 @@ export function Ai() {
 
   const chosen = items.filter((item) => selection.has(item.id));
   const chosenSize = sumSize(chosen);
-  const canMarkCold = visible.some((item) => item.heat === 'cold' && isRemovable(item) && !selection.has(item.id));
+  const canMarkCold = visible.some((item) => isSurelyCold(item) && !selection.has(item.id));
   const plan = asked ?? chosen;
-  const losses = AI_KINDS.filter((kind) => plan.some((item) => item.kind === kind && item.safety === 'moderate'));
+  const ways = waysOut(plan);
+  const losses = lossesOf(plan);
+  // Só promete a Lixeira quem vai para ela: o ollama rm apaga de vez.
+  const actionLabel = (list: readonly AiItemDTO[]) => t(waysOut(list).command ? 'ai.action.remove' : 'ai.action');
+  const commandInScan = items.some((item) => item.removal === 'command');
+  // O resultado fala só do que de fato saiu: Lixeira e ollama rm pedem avisos diferentes.
+  const gone = waysOut(
+    result ? [...result.asked.values()].filter((item) => !result.dto.failed.some((entry) => entry.id === item.id)) : []
+  );
 
   const changeView = (next: View) => {
     rememberedView = next;
@@ -530,7 +546,7 @@ export function Ai() {
           <div className="ai__notes">
             <p className="ai__note">
               <Info size={13} />
-              {t('ai.trashNote')}
+              {commandInScan ? `${t('ai.trashNote')} ${t('ai.trashNote.command')}` : t('ai.trashNote')}
             </p>
             {scan.failed.length > 0 && (
               <p className="ai__note">
@@ -599,6 +615,8 @@ export function Ai() {
             size="lg"
             data-action="ai-cold"
             disabled={!canMarkCold || loading}
+            data-tip={t('ai.markCold.tip')}
+            data-tip-pos="top"
             icon={<Snowflake size={16} />}
             onClick={() => selectColdAi(visible.map((item) => item.id))}
           >
@@ -612,7 +630,7 @@ export function Ai() {
             icon={<Trash2 size={16} />}
             onClick={() => setConfirming(true)}
           >
-            {t('ai.action')}
+            {actionLabel(chosen)}
           </Button>
         </div>
       </footer>
@@ -626,11 +644,16 @@ export function Ai() {
                   {result.dto.removed > 0 ? <CircleCheck size={30} /> : <CircleAlert size={30} />}
                 </span>
                 <h2 id="ai-remove-title" className="result__title">
-                  {result.dto.removed > 0 ? tr.plural('removed', result.dto.removed) : t('ai.result.none')}
+                  {result.dto.error
+                    ? t('ai.result.error')
+                    : result.dto.removed > 0
+                      ? tr.plural('removed', result.dto.removed)
+                      : t('ai.result.none')}
                 </h2>
+                {result.dto.error && <p className="modal__text">{t('ai.result.error.text')}</p>}
                 {result.dto.removed > 0 && <p className="modal__text">{tr.size(result.dto.freedSpace)}</p>}
               </div>
-              {result.dto.failed.length > 0 && (
+              {!result.dto.error && result.dto.failed.length > 0 && (
                 <div className="notice notice--warning ai__failed">
                   <strong>{t('ai.result.failed')}</strong>
                   <ul>
@@ -644,7 +667,8 @@ export function Ai() {
                   </ul>
                 </div>
               )}
-              {result.dto.removed > 0 && <p className="ai__note ai__note--center">{t('ai.result.trash')}</p>}
+              {gone.trash && <p className="ai__note ai__note--center">{t('ai.result.trash')}</p>}
+              {gone.command && <p className="ai__note ai__note--center">{t('ai.result.command')}</p>}
               <div className="modal__actions">
                 <Button variant="primary" onClick={closeDialog}>
                   {t('action.done')}
@@ -659,9 +683,10 @@ export function Ai() {
                 </h2>
                 <p className="modal__text">
                   {[
-                    t('ai.dialog.text'),
-                    plan.some((item) => item.removal === 'git') && t('ai.dialog.git'),
-                    plan.some((item) => item.removal === 'command') && t('ai.dialog.command'),
+                    ways.trash && t('ai.dialog.trash'),
+                    ways.git && t('ai.dialog.git'),
+                    ways.command && t('ai.dialog.command'),
+                    t('ai.dialog.check'),
                   ]
                     .filter(Boolean)
                     .join(' ')}
@@ -682,11 +707,18 @@ export function Ai() {
                 <div className="notice notice--warning ai__loss">
                   <strong>{t('ai.dialog.loss')}</strong>
                   <ul>
-                    {losses.map((kind) => (
-                      <li key={kind}>
-                        <strong>{t(`ai.kind.${kind}`)}</strong>: {t(`ai.loss.${kind}`)}
-                      </li>
-                    ))}
+                    {losses.map((loss) =>
+                      'kind' in loss ? (
+                        <li key={loss.kind}>
+                          <strong>{t(`ai.kind.${loss.kind}`)}</strong>: {t(`ai.loss.${loss.kind}`)}
+                        </li>
+                      ) : (
+                        <li key={loss.hint}>
+                          <strong>{tr.list(loss.tools.map((tool) => aiTool(tool).name))}</strong>:{' '}
+                          {t(`ai.loss.hint.${loss.hint}`)}
+                        </li>
+                      )
+                    )}
                   </ul>
                 </div>
               )}
@@ -700,7 +732,7 @@ export function Ai() {
                   icon={running ? <Spinner /> : <Trash2 size={15} />}
                   onClick={() => void run()}
                 >
-                  {t('ai.action')}
+                  {actionLabel(plan)}
                 </Button>
               </div>
             </>

@@ -314,6 +314,10 @@ export type AiBlock =
   | 'env-only'
   /** Worktree trancada por uma ferramenta que ainda roda. */
   | 'locked'
+  /** Worktree com submódulo: o git só a tira à força, e o repositório do submódulo iria junto. */
+  | 'submodule'
+  /** Worktree com arquivo ignorado pelo git que é trabalho (render, imagem, outro repositório) ou que não deu para ler inteiro. */
+  | 'ignored-work'
   /** É a versão em uso. */
   | 'current'
   /** O macOS ou a própria ferramenta apaga sozinho. */
@@ -352,7 +356,9 @@ export type AiHint =
   /** O modelo nunca foi carregado desde o download. */
   | 'never-loaded'
   /** Leva junto as imagens geradas na conversa, que podem ser a única cópia. */
-  | 'generated-images';
+  | 'generated-images'
+  /** Conversa guardada de propósito (/chat save da Gemini CLI). */
+  | 'saved-chat';
 
 export interface AiItemDTO {
   /** Identifica o item na última análise; é o que a interface devolve para remover. */
