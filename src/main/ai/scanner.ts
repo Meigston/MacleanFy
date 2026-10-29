@@ -1,0 +1,233 @@
+import { lstat } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
+import type { AiBlock, AiItemDTO, AiProgress, AiRemoveResultDTO, AiScanDTO } from '../../shared/api';
+import { validatePathSafety } from '../../core/utils/fs';
+import type { AiContext, Collector, Found } from './types';
+
+/** Coletores lidos ao mesmo tempo: alguns rodam `du` e `git` em dezenas de pastas. */
+const CONCURRENCY = 4;
+
+/** Configuração, credencial e índice: nunca saem, venham de qual coletor vierem. */
+const NEVER_NAMES = new Set([
+  'settings.json',
+  'settings.local.json',
+  'CLAUDE.md',
+  'CLAUDE.local.md',
+  'AGENTS.md',
+  'GEMINI.md',
+  '.claude.json',
+  'auth.json',
+  'config.toml',
+  'credentials.json',
+  '.credentials.json',
+  'mcp.json',
+  '.mcp.json',
+  'state.vscdb',
+  'storage.json',
+  'keybindings.json',
+  'session_index.jsonl',
+  'id_ed25519',
+  'token',
+]);
+
+/** Bloqueios que dizem que o item está em uso agora: ele é quente, seja qual for a data. */
+const LIVE: ReadonlySet<AiBlock> = new Set(['in-use', 'live-session']);
+
+/** Onde os orquestradores de agentes põem as worktrees (.claude/worktrees, ~/conductor/workspaces…). */
+export function isWorktreePath(path: string): boolean {
+  return path.split('/').some((segment) => segment === 'worktrees' || segment === 'workspaces');
+}
+
+/** Pastas que guardam muito mais do que lixo: nem elas nem quem as contém saem. */
+function protectedRoots(ctx: AiContext): string[] {
+  const h = (relative: string) => join(ctx.home, relative);
+  const claude = ctx.env.CLAUDE_CONFIG_DIR || h('.claude');
+  return [
+    ctx.home,
+    h('Library'),
+    h('Library/Application Support'),
+    h('Library/Caches'),
+    h('Library/Logs'),
+    h('Library/Containers'),
+    h('Library/Group Containers'),
+    h('Library/CloudStorage'),
+    h('Documents'),
+    h('Desktop'),
+    h('Downloads'),
+    claude,
+    join(claude, 'projects'),
+    h('.codex'),
+    h('.gemini'),
+    h('.copilot'),
+    h('.config'),
+    h('.cache'),
+    h('.local'),
+    h('.local/share'),
+    h('.lmstudio'),
+    h('.lmstudio/models'),
+    h('.ollama'),
+    h('.ollama/models'),
+    h('.npm'),
+    h('.cursor'),
+    h('.vscode'),
+    h('.vscode/extensions'),
+    ctx.tmp,
+    `/private/tmp/claude-${ctx.uid}`,
+    // Projeto que é uma worktree não conta: tirar worktree é justamente o que a tela faz.
+    ...ctx.projects.filter((path) => !isWorktreePath(path)),
+  ].map((path) => resolve(path));
+}
+
+/**
+ * A última trava antes da Lixeira, para o caso de um coletor errar: só caminho absoluto dentro
+ * da conta ou dos temporários dela, nunca configuração, credencial, memória, a pasta de um
+ * projeto ou uma pasta que contenha qualquer uma delas.
+ */
+export function refuse(path: string, ctx: AiContext): string | null {
+  if (!path.startsWith('/') || resolve(path) !== path) return 'not absolute';
+  const unsafe = validatePathSafety(path);
+  if (unsafe) return unsafe;
+
+  const roots = [ctx.home, ctx.tmp, '/private/var/folders', '/var/folders', '/private/tmp', '/tmp'];
+  if (!roots.some((root) => path.startsWith(resolve(root) + '/'))) return 'outside the account';
+
+  for (const root of protectedRoots(ctx)) {
+    if (root === path || root.startsWith(path + '/')) return `contains ${root}`;
+  }
+
+  const claude = resolve(ctx.env.CLAUDE_CONFIG_DIR || join(ctx.home, '.claude'));
+  // ~/.claude/projects/<projeto> inteira leva a memória junto.
+  if (dirname(path) === join(claude, 'projects')) return 'whole project folder';
+  if (path.startsWith(claude + '/') && path.split('/').includes('memory')) return 'memory';
+  if (/\/Library\/(Group )?Containers\//.test(path)) return 'container';
+
+  const name = basename(path);
+  if (NEVER_NAMES.has(name) || /^state_\d+\.sqlite/.test(name)) return 'configuration';
+  return null;
+}
+
+const idOf = (item: Found) => (item.key ? `${item.path}#${item.key}` : item.path);
+const inside = (child: string, parent: string) => child === parent || child.startsWith(parent + '/');
+
+export class AiScanner {
+  private known = new Map<string, Found>();
+  private knownPaths = new Set<string>();
+
+  constructor(
+    private readonly collectors: readonly Collector[],
+    private readonly makeContext: () => Promise<AiContext>
+  ) {}
+
+  /** O "Mostrar no Finder" só aponta o que a última análise listou. */
+  knows(path: string): boolean {
+    return this.knownPaths.has(path);
+  }
+
+  async scan(onProgress?: (progress: AiProgress) => void): Promise<AiScanDTO> {
+    const ctx = await this.makeContext();
+    const found: Found[] = [];
+    const failed: string[] = [];
+    let done = 0;
+    let next = 0;
+    onProgress?.({ done, total: this.collectors.length });
+
+    const worker = async () => {
+      while (next < this.collectors.length) {
+        const collector = this.collectors[next++];
+        try {
+          found.push(...(await collector.collect(ctx)));
+        } catch {
+          failed.push(collector.id);
+        }
+        onProgress?.({ done: ++done, total: this.collectors.length });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, this.collectors.length) }, worker));
+
+    // Um caminho só conta uma vez. Item dentro de outro também sai: os bytes já estão no de fora.
+    const unique = new Map<string, Found>();
+    for (const item of found) {
+      if (item.size <= 0 || unique.has(idOf(item))) continue;
+      unique.set(idOf(item), item);
+    }
+    const all = [...unique.values()];
+    const kept = all.filter(
+      (item) => !all.some((other) => other !== item && (other.paths ?? [other.path]).some((outer) => outer !== item.path && inside(item.path, outer)))
+    );
+
+    for (const item of kept) {
+      if (!item.blocked && (item.paths ?? [item.path]).some((path) => ctx.inUse(path))) item.blocked = 'in-use';
+    }
+
+    this.known = new Map(kept.map((item) => [idOf(item), item]));
+    this.knownPaths = new Set(kept.map((item) => item.path));
+    const items = kept
+      .map((item) => this.toDTO(item, ctx))
+      .sort((a, b) => b.size - a.size);
+    return { scannedAt: ctx.now, items, failed: failed.sort() };
+  }
+
+  private toDTO(item: Found, ctx: AiContext): AiItemDTO {
+    // Só o que a tela usa: os caminhos e as funções de remoção ficam no processo principal.
+    const live = !!item.blocked && LIVE.has(item.blocked);
+    const dto: AiItemDTO = {
+      id: idOf(item),
+      tool: item.tool,
+      kind: item.kind,
+      label: item.label,
+      project: item.project,
+      path: item.path,
+      size: item.size,
+      count: item.count,
+      lastUsed: item.lastUsed,
+      confidence: item.confidence ?? 'high',
+      heat: live ? 'hot' : item.junk || ctx.isCold(item.lastUsed) ? 'cold' : 'hot',
+      safety: item.safety,
+      removal: item.removal,
+    };
+    if (item.junk) dto.junk = item.junk;
+    if (item.blocked) dto.blocked = item.blocked;
+    if (item.hint) dto.hint = item.hint;
+    return dto;
+  }
+
+  async remove(ids: readonly string[]): Promise<AiRemoveResultDTO> {
+    const result: AiRemoveResultDTO = { removed: 0, freedSpace: 0, failed: [] };
+    const chosen = ids.map((id) => [id, this.known.get(id)] as const);
+    if (chosen.length === 0) return result;
+    const ctx = await this.makeContext();
+
+    for (const [id, item] of chosen) {
+      if (!item) {
+        result.failed.push({ id });
+        continue;
+      }
+      if (item.removal === 'none' || item.blocked) {
+        result.failed.push({ id, blocked: item.blocked });
+        continue;
+      }
+      const paths = item.paths ?? [item.path];
+      const blocked = paths.some((path) => ctx.inUse(path)) ? 'in-use' : await item.recheck?.(ctx).catch(() => 'in-use' as const);
+      if (blocked) {
+        result.failed.push({ id, blocked });
+        continue;
+      }
+      try {
+        if (paths.some((path) => refuse(path, ctx) !== null)) throw new Error('refused');
+        if (item.remove) {
+          await item.remove(ctx);
+        } else {
+          for (const path of paths) {
+            if (await lstat(path).catch(() => null)) await ctx.trash(path);
+          }
+        }
+        result.removed++;
+        result.freedSpace += item.size;
+        this.known.delete(id);
+      } catch {
+        result.failed.push({ id });
+      }
+    }
+    return result;
+  }
+}

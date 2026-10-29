@@ -25,6 +25,9 @@ import {
   type UpdateState,
 } from '../shared/api';
 import { SUPPORT, isPixOption } from '../shared/support';
+import { COLLECTORS } from './ai/collectors';
+import { createContext } from './ai/context';
+import { AiScanner } from './ai/scanner';
 import { DiskMap } from './disk';
 import { Engine } from './engine';
 import { HistoryStore } from './history';
@@ -106,6 +109,8 @@ export function registerIpc(): void {
   const disk = new DiskMap();
   let knownDisk = new Map<string, number>();
   app.on('will-quit', () => disk.cancel());
+  // O que as ferramentas de IA deixaram no disco; sai só pela Lixeira ou pelo git, e não entra no histórico.
+  const ai = new AiScanner(COLLECTORS, () => createContext({ trash: (path) => shell.trashItem(path) }));
 
   // Rodando do código-fonte não há instalação para atualizar: o atualizador fica inerte.
   const updater = new Updater(app.isPackaged ? electronUpdater.autoUpdater : null, (state) => {
@@ -287,6 +292,13 @@ export function registerIpc(): void {
     return true;
   });
 
+  handle(CHANNELS.aiScan, (sender) =>
+    ai.scan((progress) => {
+      if (!sender.isDestroyed()) sender.send(CHANNELS.aiProgress, progress);
+    })
+  );
+  handle(CHANNELS.aiRemove, (_sender, ids: unknown) => ai.remove(isStringArray(ids) ? ids : []));
+
   handle(CHANNELS.startupList, async () => {
     const items = await listStartupItems();
     knownStartup = new Set(items.map((item) => item.path));
@@ -314,7 +326,7 @@ export function registerIpc(): void {
     if (typeof path !== 'string') return;
     const isRelated = [...knownApps.values()].some((info) => info.related.some((r) => r.path === path));
     const isSystem = [...knownSystem.values()].some((files) => files.some((file) => file.path === path));
-    if (engine.knows(path) || knownApps.has(path) || isRelated || isSystem || knownStartup.has(path) || knownDisk.has(path)) {
+    if (engine.knows(path) || knownApps.has(path) || isRelated || isSystem || knownStartup.has(path) || knownDisk.has(path) || ai.knows(path)) {
       shell.showItemInFolder(path);
     }
   });

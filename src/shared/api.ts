@@ -27,6 +27,9 @@ export const CHANNELS = {
   diskList: 'disk:list',
   diskProgress: 'disk:progress',
   diskTrash: 'disk:trash',
+  aiScan: 'ai:scan',
+  aiProgress: 'ai:progress',
+  aiRemove: 'ai:remove',
   openLoginItems: 'shell:login-items',
   openFullDiskAccess: 'shell:full-disk-access',
   openExternal: 'shell:open-external',
@@ -210,6 +213,182 @@ export interface DiskProgress {
   path: string;
 }
 
+/** Dias sem uso para o que uma ferramenta de IA deixou contar como frio. */
+export const AI_COLD_DAYS = 7;
+
+/** Como a tela de IA agrupa as ferramentas. */
+export type AiFamily = 'assistant' | 'editor' | 'model' | 'automation';
+
+/** As ferramentas que a tela de IA conhece. O nome é a marca: igual nos dois idiomas. */
+export const AI_TOOLS = {
+  'claude-code': { name: 'Claude Code', family: 'assistant' },
+  'claude-desktop': { name: 'Claude', family: 'assistant' },
+  codex: { name: 'Codex', family: 'assistant' },
+  chatgpt: { name: 'ChatGPT', family: 'assistant' },
+  'gemini-cli': { name: 'Gemini CLI', family: 'assistant' },
+  copilot: { name: 'GitHub Copilot', family: 'assistant' },
+  opencode: { name: 'opencode', family: 'assistant' },
+  aider: { name: 'Aider', family: 'assistant' },
+  goose: { name: 'Goose', family: 'assistant' },
+  amp: { name: 'Amp', family: 'assistant' },
+  'qwen-code': { name: 'Qwen Code', family: 'assistant' },
+  crush: { name: 'Crush', family: 'assistant' },
+  granola: { name: 'Granola', family: 'assistant' },
+  conductor: { name: 'Conductor', family: 'assistant' },
+  'claude-squad': { name: 'Claude Squad', family: 'assistant' },
+  'vibe-kanban': { name: 'Vibe Kanban', family: 'assistant' },
+  crystal: { name: 'Crystal', family: 'assistant' },
+  vscode: { name: 'VS Code', family: 'editor' },
+  cursor: { name: 'Cursor', family: 'editor' },
+  windsurf: { name: 'Windsurf', family: 'editor' },
+  antigravity: { name: 'Antigravity', family: 'editor' },
+  trae: { name: 'Trae', family: 'editor' },
+  kiro: { name: 'Kiro', family: 'editor' },
+  zed: { name: 'Zed', family: 'editor' },
+  cline: { name: 'Cline', family: 'editor' },
+  'roo-code': { name: 'Roo Code', family: 'editor' },
+  'kilo-code': { name: 'Kilo Code', family: 'editor' },
+  continue: { name: 'Continue', family: 'editor' },
+  jetbrains: { name: 'JetBrains AI', family: 'editor' },
+  'lm-studio': { name: 'LM Studio', family: 'model' },
+  ollama: { name: 'Ollama', family: 'model' },
+  'hugging-face': { name: 'Hugging Face', family: 'model' },
+  jan: { name: 'Jan', family: 'model' },
+  gpt4all: { name: 'GPT4All', family: 'model' },
+  'chrome-ai': { name: 'Chrome (Gemini Nano)', family: 'model' },
+  rembg: { name: 'rembg', family: 'model' },
+  torch: { name: 'PyTorch', family: 'model' },
+  whisper: { name: 'Whisper', family: 'model' },
+  remotion: { name: 'Remotion', family: 'automation' },
+  'chrome-headless': { name: 'Chrome headless', family: 'automation' },
+  playwright: { name: 'Playwright', family: 'automation' },
+  puppeteer: { name: 'Puppeteer', family: 'automation' },
+  npx: { name: 'npx', family: 'automation' },
+} as const satisfies Record<string, { name: string; family: AiFamily }>;
+
+export type AiToolId = keyof typeof AI_TOOLS;
+
+/** O que é cada coisa que uma ferramenta de IA deixou no disco. */
+export type AiKind =
+  /** Conversas e transcrições. */
+  | 'sessions'
+  /** Cópia do repositório onde um agente trabalhou. */
+  | 'worktree'
+  /** Pontos de volta: rewind, snapshots de edição, histórico de arquivos. */
+  | 'checkpoints'
+  /** Sessões que rodaram em segundo plano e o rascunho delas. */
+  | 'jobs'
+  /** Rascunho de sessão em /tmp. */
+  | 'scratch'
+  | 'cache'
+  /** Índice de busca do código, refeito sozinho. */
+  | 'index'
+  | 'logs'
+  | 'model'
+  /** Motores e runtimes baixados pela ferramenta (Python, llama.cpp, Node). */
+  | 'runtime'
+  /** Versão antiga de um binário ou de uma extensão. */
+  | 'versions'
+  /** Temporário de automação: perfil de navegador, sobra de render. */
+  | 'temp'
+  /** Pacote baixado para rodar um servidor MCP. */
+  | 'packages'
+  /** Disco de máquina virtual. */
+  | 'vm'
+  /** O que ficou de um app que já foi desinstalado. */
+  | 'leftovers';
+
+/** Por que um item não pode sair agora. */
+export type AiBlock =
+  /** Um processo vivo está usando. */
+  | 'in-use'
+  /** O app está aberto: feche-o para remover. */
+  | 'app-open'
+  /** Sessão aberta agora. */
+  | 'live-session'
+  /** Worktree com mudança que não foi commitada. */
+  | 'uncommitted'
+  /** Worktree com commits que não estão em nenhum branch. */
+  | 'detached'
+  /** Worktree com um .env que só existe nela. */
+  | 'env-only'
+  /** Worktree trancada por uma ferramenta que ainda roda. */
+  | 'locked'
+  /** É a versão em uso. */
+  | 'current'
+  /** O macOS ou a própria ferramenta apaga sozinho. */
+  | 'self-cleaning'
+  /** Só sai pelo próprio app, que sabe o que mais limpar junto. */
+  | 'via-app'
+  /** Está no git do projeto. */
+  | 'tracked';
+
+/** Um aviso a mais, quando o texto do tipo não basta. */
+export type AiHint =
+  /** O Claude Code apaga sozinho as sessões mais velhas que cleanupPeriodDays. */
+  | 'cleanup-period'
+  /** O modelo volta se a IA no dispositivo do Chrome continuar ligada. */
+  | 'chrome-ai'
+  /** O disco da VM do Cowork sai pelo app Claude. */
+  | 'cowork-vm'
+  /** O macOS apaga o que fica três dias sem uso em /tmp. */
+  | 'tmp-cleaner'
+  /** O branch e os commits ficam no repositório. */
+  | 'branch-kept'
+  /** A ferramenta baixa de novo quando precisar. */
+  | 'redownload'
+  /** Sai pelo comando da própria ferramenta (ollama rm, hf cache rm). */
+  | 'tool-command';
+
+export interface AiItemDTO {
+  /** Identifica o item na última análise; é o que a interface devolve para remover. */
+  id: string;
+  tool: AiToolId;
+  kind: AiKind;
+  /** Nome do que está ali (projeto, modelo, versão, worktree), como está no disco. */
+  label: string;
+  /** Pasta do projeto a que pertence, quando dá para saber. */
+  project: string | null;
+  /** O caminho que "Mostrar no Finder" aponta. */
+  path: string;
+  /** Bytes no disco. Clones do APFS contam inteiros, então o que volta pode ser menos. */
+  size: number;
+  /** Quantas sessões, arquivos ou pastas o item junta. */
+  count: number;
+  /** Último uso, em ms; zero quando não há como saber. */
+  lastUsed: number;
+  /** `low` quando a data é a do download ou da instalação, e não a do uso. */
+  confidence: 'high' | 'low';
+  /** Frio: mais de AI_COLD_DAYS sem uso, ou lixo em qualquer idade. */
+  heat: 'hot' | 'cold';
+  /** Lixo em qualquer idade: temporário sem dono vivo, ou versão que nada mais usa. */
+  junk?: 'orphan' | 'old-version';
+  safety: 'safe' | 'moderate';
+  /** Como sai: para a Lixeira, pelo git, pelo comando da ferramenta, ou não sai (só se mostra). */
+  removal: 'trash' | 'git' | 'command' | 'none';
+  blocked?: AiBlock;
+  hint?: AiHint;
+}
+
+export interface AiScanDTO {
+  scannedAt: number;
+  items: AiItemDTO[];
+  /** Ferramentas cuja leitura falhou; o resto da lista vale. */
+  failed: string[];
+}
+
+export interface AiProgress {
+  done: number;
+  total: number;
+}
+
+export interface AiRemoveResultDTO {
+  removed: number;
+  freedSpace: number;
+  /** O que não saiu e, quando se sabe, por quê. */
+  failed: Array<{ id: string; blocked?: AiBlock }>;
+}
+
 /** De quem é o item: da sua conta, de todas as contas ou do sistema. */
 export type StartupScope = 'user' | 'agent' | 'daemon';
 /**
@@ -361,6 +540,13 @@ export interface MacleanFyApi {
     onProgress(listener: (progress: DiskProgress) => void): Unsubscribe;
     /** Só algo que a última listagem mostrou. */
     trash(path: string): Promise<boolean>;
+  };
+  ai: {
+    /** Lê o que as ferramentas de IA deixaram no disco. Só lê: nada muda. */
+    scan(): Promise<AiScanDTO>;
+    onProgress(listener: (progress: AiProgress) => void): Unsubscribe;
+    /** Só itens da última análise; cada um é conferido de novo antes de sair. */
+    remove(ids: string[]): Promise<AiRemoveResultDTO>;
   };
   startup: {
     list(): Promise<StartupItemDTO[]>;
