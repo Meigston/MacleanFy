@@ -4,6 +4,7 @@ import { Tooltip } from './components/Tooltip';
 import { UpdateDialog } from './components/UpdateDialog';
 import { GROUPS } from './lib/catalog';
 import { About } from './pages/About';
+import { Ai } from './pages/Ai';
 import { Cleaner } from './pages/Cleaner';
 import { Disk } from './pages/Disk';
 import { Maintenance } from './pages/Maintenance';
@@ -23,6 +24,8 @@ function Page({ route }: { route: Route }) {
       return <Cleaner />;
     case 'disk':
       return <Disk />;
+    case 'ai':
+      return <Ai />;
     case 'uninstaller':
       return <Uninstaller />;
     case 'maintenance':
@@ -40,7 +43,9 @@ export function App() {
   const route = useStore((state) => state.route);
   const locale = useStore((state) => state.locale);
   // A captura de tela (ferramenta de desenvolvimento) espera este sinal baixar.
-  const busy = useStore((state) => state.system === null || state.scanning || state.appsLoading || state.diskBusy);
+  const busy = useStore(
+    (state) => state.system === null || state.scanning || state.appsLoading || state.diskBusy || state.aiLoading
+  );
   // O aviso de atualização espera a limpeza acabar: ela tem o próprio diálogo, e um não cobre o outro.
   const updatePrompt = useStore((state) => state.updatePrompt && !state.cleaning);
 

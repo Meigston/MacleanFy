@@ -1,4 +1,4 @@
-import { Activity, ChartPie, Gauge, HeartHandshake, Info, PackageX, Sparkles, Wrench, type LucideIcon } from 'lucide-react';
+import { Activity, Bot, ChartPie, Gauge, HeartHandshake, Info, PackageX, Sparkles, Wrench, type LucideIcon } from 'lucide-react';
 import { useT } from '../i18n';
 import { GROUPS } from '../lib/catalog';
 import { useStore, type Route } from '../state/store';
@@ -25,6 +25,7 @@ export function Sidebar() {
     GROUPS.map((group) => ({ route: group.route, icon: group.icon, label: tr.group(group.group) })),
     [
       { route: 'disk', icon: ChartPie, label: tr.t('nav.disk') },
+      { route: 'ai', icon: Bot, label: tr.t('nav.ai') },
       { route: 'uninstaller', icon: PackageX, label: tr.t('nav.uninstaller') },
       { route: 'maintenance', icon: Wrench, label: tr.t('nav.maintenance') },
     ],

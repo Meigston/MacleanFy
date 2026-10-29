@@ -291,7 +291,7 @@ export type AiKind =
   | 'versions'
   /** Temporário de automação: perfil de navegador, sobra de render. */
   | 'temp'
-  /** Pacote baixado para rodar um servidor MCP. */
+  /** Pacote baixado pelo npx, quase sempre para rodar um servidor MCP. */
   | 'packages'
   /** Disco de máquina virtual. */
   | 'vm'
@@ -310,7 +310,7 @@ export type AiBlock =
   | 'uncommitted'
   /** Worktree com commits que não estão em nenhum branch. */
   | 'detached'
-  /** Worktree com um .env que só existe nela. */
+  /** Worktree com um segredo ignorado pelo git (.env, chave) que só existe nela. */
   | 'env-only'
   /** Worktree trancada por uma ferramenta que ainda roda. */
   | 'locked'
@@ -321,7 +321,13 @@ export type AiBlock =
   /** Só sai pelo próprio app, que sabe o que mais limpar junto. */
   | 'via-app'
   /** Está no git do projeto. */
-  | 'tracked';
+  | 'tracked'
+  /** Não deu para conferir agora (o git falhou, ou o item mudou desde a análise). */
+  | 'unverified'
+  /** Mexido há menos de uma hora: pode ser de algo que ainda está rodando. */
+  | 'recent'
+  /** Sai pelo app da ferramenta, que precisa estar aberto (o ollama rm fala com o servidor). */
+  | 'app-closed';
 
 /** Um aviso a mais, quando o texto do tipo não basta. */
 export type AiHint =
@@ -337,8 +343,16 @@ export type AiHint =
   | 'branch-kept'
   /** A ferramenta baixa de novo quando precisar. */
   | 'redownload'
-  /** Sai pelo comando da própria ferramenta (ollama rm, hf cache rm). */
-  | 'tool-command';
+  /** Sai pelo comando da própria ferramenta (ollama rm). */
+  | 'tool-command'
+  /** Arquive no app antes: apagar direto deixa a conversa na lista, sem abrir. */
+  | 'archive-first'
+  /** Depois de remover, /chronicle reindex no Copilot CLI acerta a busca. */
+  | 'reindex'
+  /** O modelo nunca foi carregado desde o download. */
+  | 'never-loaded'
+  /** Leva junto as imagens geradas na conversa, que podem ser a única cópia. */
+  | 'generated-images';
 
 export interface AiItemDTO {
   /** Identifica o item na última análise; é o que a interface devolve para remover. */

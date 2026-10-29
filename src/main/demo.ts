@@ -2,6 +2,9 @@ import { app, ipcMain, nativeImage, type WebContents } from 'electron';
 import type { CategoryId } from '../core/types';
 import {
   CHANNELS,
+  type AiItemDTO,
+  type AiRemoveResultDTO,
+  type AiScanDTO,
   type CleanSelection,
   type DiskFolderDTO,
   type History,
@@ -417,6 +420,99 @@ function diskTree(lang: Lang): Node {
 }
 
 // ---------------------------------------------------------------------------
+// Sessões de IA
+// ---------------------------------------------------------------------------
+
+type AiFixture = Omit<AiItemDTO, 'id' | 'size' | 'lastUsed' | 'confidence' | 'heat' | 'path' | 'project'> & {
+  path: string;
+  size: number;
+  /** Dias desde o último uso; nulo quando não há como saber. */
+  days: number | null;
+  project?: string;
+  confidence?: 'high' | 'low';
+  /** Separa dois itens no mesmo caminho, como as sessões frias e as quentes de um projeto. */
+  key?: string;
+  /** Em uso agora: quente, seja qual for a data. */
+  live?: boolean;
+};
+
+/** Uma conta com três projetos e as ferramentas de IA que quem programa costuma ter. */
+function aiFixtures(lang: Lang): AiItemDTO[] {
+  const projects = `${HOME}/${L('Projetos', 'Projects')[lang]}`;
+  const loja = `${projects}/loja-online`;
+  const financas = `${projects}/app-financas`;
+  const site = `${projects}/site-pessoal`;
+  const encoded = (project: string) => `${HOME}/.claude/projects/${project.replace(/\//g, '-')}`;
+  const tmp = '/private/var/folders/x1/k2m9q7_d4z81r6wq0000gn/T';
+
+  const list: AiFixture[] = [
+    // Claude Code: sessões por projeto, uma aberta agora, worktrees, rascunho e binários.
+    { tool: 'claude-code', kind: 'sessions', label: 'loja-online', project: loja, path: encoded(loja), key: 'cold', size: 186 * MB, count: 41, days: 23, safety: 'moderate', removal: 'trash', hint: 'cleanup-period' },
+    { tool: 'claude-code', kind: 'sessions', label: 'loja-online', project: loja, path: encoded(loja), key: 'hot', size: 38 * MB, count: 6, days: 1, safety: 'moderate', removal: 'trash' },
+    { tool: 'claude-code', kind: 'sessions', label: 'app-financas', project: financas, path: encoded(financas), key: 'cold', size: 74 * MB, count: 17, days: 12, safety: 'moderate', removal: 'trash', hint: 'cleanup-period' },
+    { tool: 'claude-code', kind: 'sessions', label: 'app-financas', project: financas, path: encoded(financas), key: 'hot', size: 12 * MB, count: 3, days: 0.01, safety: 'moderate', removal: 'none', blocked: 'live-session', live: true },
+    { tool: 'claude-code', kind: 'sessions', label: 'site-pessoal', project: site, path: encoded(site), key: 'cold', size: 22 * MB, count: 9, days: 40, safety: 'moderate', removal: 'trash', hint: 'cleanup-period' },
+    { tool: 'claude-code', kind: 'worktree', label: 'checkout-pix', project: loja, path: `${loja}/.claude/worktrees/checkout-pix`, size: 6.8 * GB, count: 48211, days: 18, safety: 'moderate', removal: 'git', hint: 'branch-kept' },
+    { tool: 'claude-code', kind: 'worktree', label: 'frete-correios', project: loja, path: `${loja}/.claude/worktrees/frete-correios`, size: 4.1 * GB, count: 31877, days: 26, safety: 'moderate', removal: 'git', hint: 'branch-kept' },
+    { tool: 'claude-code', kind: 'worktree', label: 'graficos-mensais', project: financas, path: `${financas}/.claude/worktrees/graficos-mensais`, size: 3.2 * GB, count: 26405, days: 11, safety: 'moderate', removal: 'git', hint: 'branch-kept' },
+    { tool: 'claude-code', kind: 'worktree', label: 'importar-ofx', project: financas, path: `${financas}/.claude/worktrees/importar-ofx`, size: 2.7 * GB, count: 22950, days: 15, safety: 'moderate', removal: 'git', blocked: 'uncommitted' },
+    { tool: 'claude-code', kind: 'worktree', label: 'novo-blog', project: site, path: `${site}/.claude/worktrees/novo-blog`, size: 1.1 * GB, count: 9804, days: 2, safety: 'moderate', removal: 'git', hint: 'branch-kept' },
+    { tool: 'claude-code', kind: 'jobs', label: 'revisar-acessibilidade', project: loja, path: `${HOME}/.claude/jobs/8f3a51c2`, size: 1.4 * GB, count: 1, days: 30, safety: 'moderate', removal: 'trash' },
+    { tool: 'claude-code', kind: 'checkpoints', label: 'file-history', path: `${HOME}/.claude/file-history`, size: 310 * MB, count: 2140, days: 9, safety: 'moderate', removal: 'trash' },
+    { tool: 'claude-code', kind: 'scratch', label: 'loja-online', project: loja, path: '/private/tmp/claude-501/-Users-ana-Projetos-loja-online', size: 2.3 * GB, count: 3, days: 0.1, safety: 'safe', removal: 'none', blocked: 'self-cleaning', hint: 'tmp-cleaner' },
+    { tool: 'claude-code', kind: 'versions', label: '2.4.12', path: `${HOME}/.local/share/claude/versions/2.4.12`, size: 212 * MB, count: 1, days: 21, safety: 'safe', removal: 'trash', junk: 'old-version' },
+    { tool: 'claude-code', kind: 'versions', label: '2.4.18', path: `${HOME}/.local/share/claude/versions/2.4.18`, size: 214 * MB, count: 1, days: 9, safety: 'safe', removal: 'trash', junk: 'old-version' },
+    { tool: 'claude-code', kind: 'versions', label: '2.5.3', path: `${HOME}/.local/share/claude/versions/2.5.3`, size: 218 * MB, count: 1, days: 0.02, safety: 'safe', removal: 'none', blocked: 'current' },
+    { tool: 'claude-code', kind: 'logs', label: 'mcp-logs', path: `${HOME}/Library/Caches/claude-cli-nodejs`, size: 96 * MB, count: 412, days: 14, safety: 'safe', removal: 'trash' },
+    // Claude: o disco da VM do Cowork só sai pelo app.
+    { tool: 'claude-desktop', kind: 'vm', label: 'Cowork', path: `${HOME}/Library/Application Support/Claude/vm_bundles`, size: 11.2 * GB, count: 1, days: 18, safety: 'moderate', removal: 'none', blocked: 'via-app', hint: 'cowork-vm' },
+    // Codex
+    { tool: 'codex', kind: 'sessions', label: 'loja-online', project: loja, path: `${HOME}/.codex/sessions`, key: 'loja', size: 64 * MB, count: 12, days: 34, safety: 'moderate', removal: 'trash' },
+    { tool: 'codex', kind: 'sessions', label: 'app-financas', project: financas, path: `${HOME}/.codex/sessions`, key: 'financas', size: 9 * MB, count: 4, days: 3, safety: 'moderate', removal: 'trash' },
+    { tool: 'codex', kind: 'cache', label: 'cache', path: `${HOME}/.codex/cache`, size: 120 * MB, count: 860, days: 16, safety: 'safe', removal: 'trash' },
+    // Copilot: os chats do VS Code ficam no armazenamento de cada workspace.
+    { tool: 'copilot', kind: 'sessions', label: 'loja-online', project: loja, path: `${HOME}/Library/Application Support/Code/User/workspaceStorage/4c1e9a7b/chatSessions`, size: 58 * MB, count: 22, days: 19, safety: 'moderate', removal: 'trash' },
+    { tool: 'copilot', kind: 'sessions', label: 'site-pessoal', project: site, path: `${HOME}/Library/Application Support/Code/User/workspaceStorage/b72d03f1/chatSessions`, size: 31 * MB, count: 8, days: 4, safety: 'moderate', removal: 'trash' },
+    { tool: 'copilot', kind: 'index', label: 'project-index', project: loja, path: `${HOME}/Library/Application Support/Code/User/globalStorage/github.copilot-chat/project-index`, size: 240 * MB, count: 1, days: 19, safety: 'safe', removal: 'trash' },
+    // Cursor: o app já saiu do Mac, os restos ficaram.
+    { tool: 'cursor', kind: 'leftovers', label: 'Application Support/Cursor', path: `${HOME}/Library/Application Support/Cursor`, size: 2.9 * GB, count: 1, days: 95, safety: 'moderate', removal: 'trash' },
+    { tool: 'cursor', kind: 'leftovers', label: '.cursor', path: `${HOME}/.cursor`, size: 1.2 * GB, count: 1, days: 95, safety: 'moderate', removal: 'trash' },
+    { tool: 'cursor', kind: 'cache', label: 'com.todesktop.230313mzl4w4u92', path: `${HOME}/Library/Caches/com.todesktop.230313mzl4w4u92.ShipIt`, size: 380 * MB, count: 1, days: 95, safety: 'safe', removal: 'trash' },
+    // LM Studio: um modelo baixado e nunca carregado, outro aberto agora.
+    { tool: 'lm-studio', kind: 'model', label: 'Qwen3.6-35B-A3B-Q4_K_M', path: `${HOME}/.lmstudio/models/lmstudio-community/Qwen3.6-35B-A3B-GGUF`, size: 19.4 * GB, count: 2, days: 188, confidence: 'low', safety: 'moderate', removal: 'trash', hint: 'redownload' },
+    { tool: 'lm-studio', kind: 'model', label: 'gemma-4-12b-it-Q4_K_M', path: `${HOME}/.lmstudio/models/lmstudio-community/gemma-4-12b-it-GGUF`, size: 7.9 * GB, count: 1, days: 0.05, safety: 'moderate', removal: 'trash', blocked: 'app-open', live: true },
+    // Hugging Face
+    { tool: 'hugging-face', kind: 'model', label: 'openai/whisper-large-v3', path: `${HOME}/.cache/huggingface/hub/models--openai--whisper-large-v3`, size: 3.1 * GB, count: 1, days: 120, safety: 'moderate', removal: 'command', hint: 'tool-command' },
+    // Chrome: o Gemini Nano usado sozinho pelo alerta de golpe.
+    { tool: 'chrome-ai', kind: 'model', label: 'Gemini Nano', path: `${HOME}/Library/Application Support/Google/Chrome/OptGuideOnDeviceModel/2026.8.8.1141`, size: 4.0 * GB, count: 1, days: 4, safety: 'moderate', removal: 'trash', hint: 'chrome-ai' },
+    // Remotion: sobras de renders interrompidos, sem processo dono.
+    { tool: 'remotion', kind: 'temp', label: 'remotion-assets-*', path: `${tmp}/remotion-v4.0.361-assets`, size: 9.8 * GB, count: 180, days: 1, safety: 'safe', removal: 'trash', junk: 'orphan' },
+    { tool: 'remotion', kind: 'temp', label: 'react-motion-render-*', path: `${tmp}/react-motion-render`, size: 3.8 * GB, count: 65, days: 1, safety: 'safe', removal: 'trash', junk: 'orphan' },
+    { tool: 'playwright', kind: 'runtime', label: 'chromium-1187', path: `${HOME}/Library/Caches/ms-playwright/chromium-1187`, size: 420 * MB, count: 1, days: 61, confidence: 'low', safety: 'safe', removal: 'trash', junk: 'old-version' },
+    // npx: pacotes baixados para rodar servidores MCP.
+    { tool: 'npx', kind: 'packages', label: '@playwright/mcp', path: `${HOME}/.npm/_npx/6a0b1f2c9e4d7a31`, size: 310 * MB, count: 1, days: 21, safety: 'moderate', removal: 'trash', hint: 'redownload' },
+    { tool: 'npx', kind: 'packages', label: '@modelcontextprotocol/server-filesystem', path: `${HOME}/.npm/_npx/d9c4e81a07b25f66`, size: 48 * MB, count: 1, days: 45, safety: 'safe', removal: 'trash', junk: 'old-version' },
+  ];
+
+  const now = Date.now();
+  return list
+    .map(({ days, key, live, project, confidence, ...rest }) => {
+      const lastUsed = days === null ? 0 : Math.round(now - days * DAY);
+      const cold = !!rest.junk || days === null || days > 7;
+      return {
+        ...rest,
+        id: key ? `${rest.path}#${key}` : rest.path,
+        project: project ?? null,
+        size: Math.round(rest.size),
+        lastUsed,
+        confidence: confidence ?? 'high',
+        heat: live || !cold ? ('hot' as const) : ('cold' as const),
+      };
+    })
+    .sort((a, b) => b.size - a.size);
+}
+
+// ---------------------------------------------------------------------------
 // Desempenho
 // ---------------------------------------------------------------------------
 
@@ -498,6 +594,7 @@ export function registerDemoIpc(): void {
   const cleaned = new Set<CategoryId>();
   const removedApps = new Set<string>();
   const tree = diskTree(lang);
+  let aiItems = aiFixtures(lang);
   let measured = false;
   let tick = 0;
 
@@ -710,6 +807,37 @@ export function registerDemoIpc(): void {
     }
     // Na Lixeira o arquivo ainda ocupa o disco: o espaço livre fica como está.
     return true;
+  });
+
+  handle(CHANNELS.aiScan, async (sender): Promise<AiScanDTO> => {
+    // Sete leitores, como os coletores de verdade, em uns dois segundos.
+    const total = 7;
+    for (let done = 0; done <= total; done++) {
+      send(sender, CHANNELS.aiProgress, { done, total });
+      if (done < total) await sleep(240 + ((done * 97) % 160));
+    }
+    return { scannedAt: Date.now(), items: aiItems, failed: [] };
+  });
+
+  handle(CHANNELS.aiRemove, async (_sender, ids): Promise<AiRemoveResultDTO> => {
+    const asked = new Set(Array.isArray(ids) ? (ids as string[]) : []);
+    const result: AiRemoveResultDTO = { removed: 0, freedSpace: 0, failed: [] };
+    await sleep(900 + asked.size * 60);
+    // Como o processo principal: o que está bloqueado ou só se mostra fica, com o motivo.
+    for (const item of aiItems) {
+      if (!asked.has(item.id)) continue;
+      asked.delete(item.id);
+      if (item.blocked || item.removal === 'none') {
+        result.failed.push({ id: item.id, blocked: item.blocked });
+        continue;
+      }
+      result.removed++;
+      result.freedSpace += item.size;
+    }
+    for (const id of asked) result.failed.push({ id });
+    const failed = new Set(result.failed.map((entry) => entry.id));
+    aiItems = aiItems.filter((item) => failed.has(item.id) || !(Array.isArray(ids) && ids.includes(item.id)));
+    return result;
   });
 
   handle(CHANNELS.maintenanceInfo, async () => {

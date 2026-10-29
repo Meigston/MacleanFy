@@ -121,6 +121,31 @@ describe('refuse', () => {
     expect(refuse('/var/folders/xy/T', ctx)).not.toBeNull();
   });
 
+  it('refuses the state that Claude Code, Codex and Gemini keep alive', () => {
+    expect(refuse('/Users/ana/.claude/jobs', ctx)).not.toBeNull();
+    expect(refuse('/Users/ana/.claude/jobs/1/state.json', ctx)).not.toBeNull();
+    expect(refuse('/Users/ana/.claude/sessions/123.json', ctx)).not.toBeNull();
+    expect(refuse('/Users/ana/.claude/plugins/cache/x', ctx)).not.toBeNull();
+    expect(refuse('/Users/ana/.claude/history.jsonl', ctx)).not.toBeNull();
+    expect(refuse('/Users/ana/.local/share/claude/versions', ctx)).not.toBeNull();
+    expect(refuse('/Users/ana/Library/Application Support/Claude', ctx)).not.toBeNull();
+    expect(refuse('/Users/ana/Library/Application Support/Claude/vm_bundles/claudevm.bundle/sessiondata.img', ctx)).not.toBeNull();
+    expect(refuse('/Users/ana/.codex/memories_1.sqlite', ctx)).not.toBeNull();
+    expect(refuse('/Users/ana/.gemini/oauth_creds.json', ctx)).not.toBeNull();
+  });
+
+  it('still lets through the pieces those tools leave behind', () => {
+    expect(refuse('/Users/ana/.claude/jobs/1/tmp', ctx)).toBeNull();
+    expect(refuse('/Users/ana/.local/share/claude/versions/2.1.300', ctx)).toBeNull();
+    expect(refuse('/Users/ana/Library/Application Support/Claude/Cache', ctx)).toBeNull();
+    expect(refuse('/Users/ana/Library/Application Support/Google/Chrome/OptGuideOnDeviceModel', ctx)).toBeNull();
+  });
+
+  it('treats the orchestrators’ hidden folders as worktrees, not projects', () => {
+    const withConductor = fakeContext({ home: '/Users/ana', tmp: '/var/folders/xy/T', projects: ['/Users/ana/code/app/.conductor/feat'] });
+    expect(refuse('/Users/ana/code/app/.conductor/feat', withConductor)).toBeNull();
+  });
+
   it('refuses anything outside the account or not absolute', () => {
     expect(refuse('/Applications/Claude.app', ctx)).not.toBeNull();
     expect(refuse('relative/path', ctx)).not.toBeNull();

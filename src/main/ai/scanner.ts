@@ -28,21 +28,71 @@ const NEVER_NAMES = new Set([
   'session_index.jsonl',
   'id_ed25519',
   'token',
+  // Claude Code e Claude Desktop.
+  'state.json',
+  'adopt.json',
+  'roster.json',
+  'control.key',
+  'history.jsonl',
+  'sessiondata.img',
+  'git-worktrees.json',
+  'buddy-tokens.json',
+  'ant-did',
+  // Gemini, Antigravity e editores da família do VS Code.
+  'oauth_creds.json',
+  'google_accounts.json',
+  'mcp-oauth-tokens.json',
+  'trustedFolders.json',
+  'installation_id',
+  'mcp_config.json',
+  '.project_root',
+  'extensions.json',
+  'argv.json',
 ]);
+
+/** Bancos de estado do Codex: state_5.sqlite, memories_1.sqlite… */
+const NEVER_PATTERN = /^(state|memories|goals|queue|thread_history)_\d+\.sqlite/;
+
+/** Pastas de primeiro nível do Claude Code que guardam configuração ou estado vivo. */
+const CLAUDE_KEEP = new Set(['sessions', 'daemon', 'plugins', 'skills', 'agents', 'commands', 'backups', 'memory', 'hooks']);
 
 /** Bloqueios que dizem que o item está em uso agora: ele é quente, seja qual for a data. */
 const LIVE: ReadonlySet<AiBlock> = new Set(['in-use', 'live-session']);
 
 /** Onde os orquestradores de agentes põem as worktrees (.claude/worktrees, ~/conductor/workspaces…). */
 export function isWorktreePath(path: string): boolean {
-  return path.split('/').some((segment) => segment === 'worktrees' || segment === 'workspaces');
+  return path
+    .split('/')
+    .some((segment) => ['worktrees', 'workspaces', '.vibe-kanban-workspaces', '.conductor'].includes(segment));
 }
 
 /** Pastas que guardam muito mais do que lixo: nem elas nem quem as contém saem. */
 function protectedRoots(ctx: AiContext): string[] {
   const h = (relative: string) => join(ctx.home, relative);
   const claude = ctx.env.CLAUDE_CONFIG_DIR || h('.claude');
+  const support = (app: string) => h(`Library/Application Support/${app}`);
   return [
+    ...[...CLAUDE_KEEP, 'jobs'].map((name) => join(claude, name)),
+    h('.local/bin'),
+    h('.local/state'),
+    h('.local/share/claude'),
+    h('.local/share/claude/versions'),
+    support('Claude'),
+    support('Claude/vm_bundles'),
+    support('Codex'),
+    support('Antigravity'),
+    support('Code'),
+    support('Code/User'),
+    support('Code/User/workspaceStorage'),
+    support('Code/User/globalStorage'),
+    support('Google'),
+    support('Google/Chrome'),
+    h('Library/Logs/Claude'),
+    ...(ctx.env.CODEX_HOME ? [ctx.env.CODEX_HOME] : []),
+    ...(ctx.env.GEMINI_CLI_HOME ? [join(ctx.env.GEMINI_CLI_HOME, '.gemini')] : []),
+    h('.gemini/antigravity'),
+    h('.antigravity'),
+    h('.antigravity/extensions'),
     ctx.home,
     h('Library'),
     h('Library/Application Support'),
@@ -98,11 +148,14 @@ export function refuse(path: string, ctx: AiContext): string | null {
   const claude = resolve(ctx.env.CLAUDE_CONFIG_DIR || join(ctx.home, '.claude'));
   // ~/.claude/projects/<projeto> inteira leva a memória junto.
   if (dirname(path) === join(claude, 'projects')) return 'whole project folder';
-  if (path.startsWith(claude + '/') && path.split('/').includes('memory')) return 'memory';
+  if (path.startsWith(claude + '/')) {
+    if (path.split('/').includes('memory')) return 'memory';
+    if (CLAUDE_KEEP.has(path.slice(claude.length + 1).split('/')[0])) return 'claude state';
+  }
   if (/\/Library\/(Group )?Containers\//.test(path)) return 'container';
 
   const name = basename(path);
-  if (NEVER_NAMES.has(name) || /^state_\d+\.sqlite/.test(name)) return 'configuration';
+  if (NEVER_NAMES.has(name) || NEVER_PATTERN.test(name)) return 'configuration';
   return null;
 }
 
@@ -164,7 +217,8 @@ export class AiScanner {
     const items = kept
       .map((item) => this.toDTO(item, ctx))
       .sort((a, b) => b.size - a.size);
-    return { scannedAt: ctx.now, items, failed: failed.sort() };
+    // Uma ferramenta pode ter mais de um coletor (o Copilot tem três): o nome sai uma vez só.
+    return { scannedAt: ctx.now, items, failed: [...new Set(failed)].sort() };
   }
 
   private toDTO(item: Found, ctx: AiContext): AiItemDTO {

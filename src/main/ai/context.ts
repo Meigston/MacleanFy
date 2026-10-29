@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
-import { open, readdir, readFile, stat } from 'node:fs/promises';
+import { access, open, readdir, readFile, stat } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AI_COLD_DAYS } from '../../shared/api';
 import { measure } from './measure';
@@ -50,7 +50,8 @@ export function parseLsofCwd(output: string): Map<number, string> {
   let pid = 0;
   for (const line of output.split('\n')) {
     if (line.startsWith('p')) pid = Number(line.slice(1));
-    else if (line.startsWith('n') && pid > 0) cwds.set(pid, line.slice(1));
+    // Só o primeiro nome de cada processo: com -d txt, o executável vem antes das bibliotecas.
+    else if (line.startsWith('n') && pid > 0 && !cwds.has(pid)) cwds.set(pid, line.slice(1));
   }
   return cwds;
 }
@@ -63,7 +64,17 @@ export async function listProcesses(): Promise<ProcessInfo[]> {
   ]);
   const commandLines = parsePs(args.stdout);
   const cwds = parseLsofCwd(lsof.stdout);
-  return [...parsePs(exes.stdout)].map(([pid, exe]) => ({
+  const commands = parsePs(exes.stdout);
+
+  // O binário nativo do Claude Code aparece no ps só como "claude". O executável de verdade
+  // (~/.local/share/claude/versions/<v>) é o primeiro arquivo de texto que o lsof mostra.
+  const bare = [...commands].filter(([, exe]) => !exe.startsWith('/')).map(([pid]) => pid);
+  if (bare.length > 0) {
+    const texts = await run('/usr/sbin/lsof', ['-nP', '-a', '-p', bare.join(','), '-d', 'txt', '-Fpn'], { timeoutMs: 15_000 });
+    for (const [pid, exe] of parseLsofCwd(texts.stdout)) commands.set(pid, exe);
+  }
+
+  return [...commands].map(([pid, exe]) => ({
     pid,
     exe,
     args: commandLines.get(pid) ?? exe,
@@ -165,14 +176,37 @@ export async function discoverProjects(home: string, claudeDir: string, live: re
     }
   }
 
+  // Sessão aberta numa pasta que junta repositórios (~/Repositorios) não diz em qual deles
+  // trabalhou: os repositórios filhos entram, para as worktrees deles aparecerem.
+  for (const path of [...found]) {
+    if (!path.startsWith(home + '/') || (await inRepository(path, home))) continue;
+    for (const child of await entries(path)) {
+      const repo = join(path, child.name);
+      if (child.isDirectory() && (await exists(join(repo, '.git')))) found.add(repo);
+    }
+  }
+
   return [...found].filter((path) => path.startsWith('/') && path !== home).sort();
+}
+
+const exists = (path: string) => access(path).then(
+  () => true,
+  () => false
+);
+
+/** A pasta, ou uma acima dela até a pessoal, tem .git. */
+async function inRepository(path: string, home: string): Promise<boolean> {
+  for (let dir = path; dir.startsWith(home + '/'); dir = dirname(dir)) {
+    if (await exists(join(dir, '.git'))) return true;
+  }
+  return false;
 }
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** O caminho aparece nos argumentos como ele mesmo ou como pasta-mãe, nunca como prefixo de outro nome. */
+/** O caminho aparece nos argumentos como ele mesmo ou como pasta-mãe, nunca como pedaço de outro nome. */
 export function mentions(args: string, path: string): boolean {
-  return new RegExp(`${escape(path)}(?=$|[/\\s"'=:,])`).test(args);
+  return new RegExp(`(?<=^|[\\s"'=:,])${escape(path)}(?=$|[/\\s"'=:,])`).test(args);
 }
 
 export function isInUse(processes: readonly ProcessInfo[], path: string): boolean {
@@ -184,6 +218,22 @@ export async function duSize(path: string): Promise<number> {
   const { stdout } = await run('/usr/bin/du', ['-sk', path], { timeoutMs: 10 * 60_000 });
   const match = /^(\d+)\t/.exec(stdout);
   return match ? Number(match[1]) * 1024 : 0;
+}
+
+/**
+ * O git de verdade: o das Command Line Tools, o do Xcode ou o do Homebrew. O /usr/bin/git é só
+ * um atalho que, num Mac sem as ferramentas, abre o instalador na tela; nesse caso não há git.
+ */
+export async function findGit(): Promise<string | null> {
+  const developer = (await run('/usr/bin/xcode-select', ['-p'], { timeoutMs: 5_000 })).stdout.trim();
+  const candidates = [
+    '/Library/Developer/CommandLineTools/usr/bin/git',
+    ...(developer.startsWith('/') ? [join(developer, 'usr/bin/git')] : []),
+    '/opt/homebrew/bin/git',
+    '/usr/local/bin/git',
+  ];
+  for (const candidate of candidates) if (await exists(candidate)) return candidate;
+  return null;
 }
 
 export interface ContextOptions {
@@ -198,7 +248,7 @@ export async function createContext(options: ContextOptions): Promise<AiContext>
   const now = options.now ?? Date.now();
   const env = process.env;
   const claudeDir = env.CLAUDE_CONFIG_DIR || join(home, '.claude');
-  const processes = await listProcesses();
+  const [processes, git] = await Promise.all([listProcesses(), findGit()]);
   const claudeSessions = await liveClaudeSessions(claudeDir, processes);
   const projects = await discoverProjects(home, claudeDir, claudeSessions);
 
@@ -216,7 +266,13 @@ export async function createContext(options: ContextOptions): Promise<AiContext>
     running: (exe) => processes.some((p) => exe.test(p.exe)),
     measure,
     du: duSize,
-    exec: run,
+    // Os coletores chamam 'git'; ele vira o git de verdade, ou falha sem abrir nada.
+    exec: (file, args, execOptions) =>
+      file === 'git' || file === '/usr/bin/git'
+        ? git
+          ? run(git, args, execOptions)
+          : Promise.resolve({ code: 127, stdout: '', stderr: 'git not installed' })
+        : run(file, args, execOptions),
     trash: options.trash,
   };
 }

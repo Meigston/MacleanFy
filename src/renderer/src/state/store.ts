@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { CATEGORIES, type CategoryId } from '../../../core/types';
 import type {
+  AiProgress,
+  AiRemoveResultDTO,
+  AiScanDTO,
   AppsProgress,
   CleanProgress,
   CleanSummaryDTO,
@@ -13,6 +16,7 @@ import type {
   UpdateState,
 } from '../../../shared/api';
 import { initialLocale, persistLocale, type Locale } from '../i18n/locale';
+import { isRemovable } from '../lib/ai';
 import { ALL_CATEGORY_IDS, type GroupRoute } from '../lib/catalog';
 
 export type Route =
@@ -21,6 +25,7 @@ export type Route =
   | 'smart'
   | GroupRoute
   | 'disk'
+  | 'ai'
   | 'uninstaller'
   | 'maintenance'
   | 'support'
@@ -36,6 +41,7 @@ const ROUTES: Route[] = [
   'browsers',
   'large',
   'disk',
+  'ai',
   'uninstaller',
   'maintenance',
   'support',
@@ -75,6 +81,14 @@ interface State {
   /** Medindo o espaço da conta; a captura de tela espera acabar. */
   diskBusy: boolean;
 
+  /** O que as ferramentas de IA deixaram no disco, na última análise. */
+  ai: AiScanDTO | null;
+  aiLoading: boolean;
+  aiProgress: AiProgress | null;
+  /** A última análise falhou inteira (não só uma ferramenta). */
+  aiError: boolean;
+  aiSelection: ReadonlySet<string>;
+
   update: UpdateState;
   /** O aviso de atualização está aberto? Abre sozinho uma vez por versão e quando ela fica pronta. */
   updatePrompt: boolean;
@@ -92,6 +106,14 @@ interface State {
   uninstallSelected(options?: UninstallOptionsDTO): Promise<UninstallResultDTO>;
   setUpdatePrompt(open: boolean): void;
   setDiskBusy(busy: boolean): void;
+
+  loadAi(): Promise<void>;
+  toggleAiItem(id: string): void;
+  setAiSelected(ids: readonly string[], selected: boolean): void;
+  /** Marca o que está frio e pode sair; com `ids`, só entre eles (o que o filtro mostra). */
+  selectColdAi(ids?: readonly string[]): void;
+  clearAiSelection(): void;
+  removeAiSelected(): Promise<AiRemoveResultDTO>;
 }
 
 /**
@@ -103,6 +125,9 @@ function defaultSelection(result: ScanResultDTO): ReadonlySet<string> {
   const preselected = CATEGORIES[result.categoryId].safetyLevel === 'safe' && result.categoryId !== 'docker';
   return preselected ? new Set(result.items.map((item) => item.path)) : new Set();
 }
+
+/** Quem estava em uso quando a remoção conferiu de novo é quente, como na análise. */
+const LIVE_FAILURES = new Set(['in-use', 'live-session']);
 
 let subscribed = false;
 /** Versão que já teve o aviso aberto nesta sessão: fechar com "Depois" vale até o app reabrir. */
@@ -131,6 +156,12 @@ export const useStore = create<State>((set, get) => ({
   appsProgress: null,
   appSelection: new Set(),
 
+  ai: null,
+  aiLoading: false,
+  aiProgress: null,
+  aiError: false,
+  aiSelection: new Set(),
+
   update: { status: 'idle' },
   updatePrompt: false,
 
@@ -148,6 +179,7 @@ export const useStore = create<State>((set, get) => ({
       });
       window.macleanfy.clean.onProgress((cleanProgress) => set({ cleanProgress }));
       window.macleanfy.apps.onProgress((appsProgress) => set({ appsProgress }));
+      window.macleanfy.ai.onProgress((aiProgress) => set({ aiProgress }));
 
       const receive = (update: UpdateState) =>
         set((state) => {
@@ -257,6 +289,74 @@ export const useStore = create<State>((set, get) => ({
 
   setDiskBusy(busy) {
     set({ diskBusy: busy });
+  },
+
+  async loadAi() {
+    if (get().aiLoading) return;
+
+    set({ aiLoading: true, aiProgress: null, aiError: false });
+    try {
+      const ai = await window.macleanfy.ai.scan();
+      // Nada vem marcado: sessão, worktree e modelo são escolha de quem usa, item a item.
+      set({ ai, aiSelection: new Set() });
+    } catch {
+      set({ aiError: true });
+    } finally {
+      set({ aiLoading: false });
+    }
+  },
+
+  toggleAiItem(id) {
+    const item = get().ai?.items.find((entry) => entry.id === id);
+    if (!item || !isRemovable(item)) return;
+    const next = new Set(get().aiSelection);
+    if (!next.delete(id)) next.add(id);
+    set({ aiSelection: next });
+  },
+
+  setAiSelected(ids, selected) {
+    const wanted = new Set(ids);
+    const next = new Set(get().aiSelection);
+    for (const item of get().ai?.items ?? []) {
+      if (!wanted.has(item.id) || !isRemovable(item)) continue;
+      if (selected) next.add(item.id);
+      else next.delete(item.id);
+    }
+    set({ aiSelection: next });
+  },
+
+  selectColdAi(ids) {
+    const scope = ids ? new Set(ids) : null;
+    const next = new Set(get().aiSelection);
+    for (const item of get().ai?.items ?? []) {
+      if (item.heat === 'cold' && isRemovable(item) && (!scope || scope.has(item.id))) next.add(item.id);
+    }
+    set({ aiSelection: next });
+  },
+
+  clearAiSelection() {
+    set({ aiSelection: new Set() });
+  },
+
+  async removeAiSelected() {
+    const chosen = get().aiSelection;
+    const result = await window.macleanfy.ai.remove([...chosen]);
+    const failed = new Map(result.failed.map((entry) => [entry.id, entry.blocked]));
+    // O que saiu some da lista na hora; refazer a análise levaria dezenas de segundos.
+    // O que ficou mostra o motivo que a nova conferência deu.
+    set((state) => {
+      if (!state.ai) return { aiSelection: new Set() };
+      const items = state.ai.items.flatMap((item) => {
+        if (!chosen.has(item.id)) return [item];
+        if (!failed.has(item.id)) return [];
+        const blocked = failed.get(item.id);
+        if (!blocked) return [item];
+        return [{ ...item, blocked, heat: LIVE_FAILURES.has(blocked) ? ('hot' as const) : item.heat }];
+      });
+      return { ai: { ...state.ai, items }, aiSelection: new Set() };
+    });
+    void get().refresh();
+    return result;
   },
 }));
 
