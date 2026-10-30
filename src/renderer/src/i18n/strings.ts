@@ -438,6 +438,9 @@ export const pt = {
   'dialog.update.error.text':
     'Tente de novo em alguns minutos. Se continuar, baixe a versão nova em macleanfy.com.',
   'dialog.update.close': 'Fechar',
+  'dialog.whatsNew.title': 'Novidades da versão {version}',
+  'dialog.whatsNew.history': 'Ver todas as versões no GitHub',
+  'dialog.whatsNew.close': 'Entendi',
 
   'safety.safe': 'Seguro',
   'safety.moderate': 'Moderado',
@@ -903,6 +906,9 @@ export const en: Record<StringKey, string> = {
   'dialog.update.error.text':
     'Try again in a few minutes. If it keeps failing, download the new version from macleanfy.com.',
   'dialog.update.close': 'Close',
+  'dialog.whatsNew.title': 'What’s new in {version}',
+  'dialog.whatsNew.history': 'See every release on GitHub',
+  'dialog.whatsNew.close': 'Got it',
 
   'safety.safe': 'Safe',
   'safety.moderate': 'Moderate',

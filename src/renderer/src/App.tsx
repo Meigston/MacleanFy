@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Tooltip } from './components/Tooltip';
 import { UpdateDialog } from './components/UpdateDialog';
+import { WhatsNewDialog } from './components/WhatsNewDialog';
 import { GROUPS } from './lib/catalog';
 import { About } from './pages/About';
 import { Ai } from './pages/Ai';
@@ -46,8 +47,9 @@ export function App() {
   const busy = useStore(
     (state) => state.system === null || state.scanning || state.appsLoading || state.diskBusy || state.aiLoading
   );
-  // O aviso de atualização espera a limpeza acabar: ela tem o próprio diálogo, e um não cobre o outro.
-  const updatePrompt = useStore((state) => state.updatePrompt && !state.cleaning);
+  const whatsNew = useStore((state) => state.whatsNew);
+  // O aviso de atualização espera a limpeza e as novidades: um diálogo não cobre o outro.
+  const updatePrompt = useStore((state) => state.updatePrompt && !state.cleaning && !state.whatsNew);
 
   useEffect(() => {
     void useStore.getState().init();
@@ -68,6 +70,7 @@ export function App() {
       <main className="app__main" key={route}>
         <Page route={route} />
       </main>
+      {whatsNew && <WhatsNewDialog version={whatsNew} />}
       {updatePrompt && <UpdateDialog />}
       <Tooltip />
     </div>

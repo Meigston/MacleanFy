@@ -36,6 +36,7 @@ import { listStartupItems, readStartupPlists } from './startup';
 import { removalScript, systemFilesOf, type SystemFile } from './system-files';
 import { getMaintenanceInfo, getSystemInfo, runAsAdmin, runMaintenance, setNoDsStore } from './system';
 import { Updater } from './updater';
+import { firstLaunchOf } from './whats-new';
 
 const FULL_DISK_ACCESS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
 const ACTIVITY_MONITOR = '/System/Applications/Utilities/Activity Monitor.app';
@@ -140,6 +141,7 @@ export function registerIpc(): void {
 
   handle(CHANNELS.systemInfo, () => getSystemInfo());
   handle(CHANNELS.historyGet, () => history.read());
+  handle(CHANNELS.whatsNew, () => firstLaunchOf(app.getVersion(), join(app.getPath('userData'), 'last-version')));
 
   handle(CHANNELS.updateState, () => updateDemo ?? updater.current());
   handle(CHANNELS.updateCheck, () => updater.check(true));

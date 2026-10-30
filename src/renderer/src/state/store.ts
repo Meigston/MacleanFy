@@ -92,6 +92,8 @@ interface State {
   update: UpdateState;
   /** O aviso de atualização está aberto? Abre sozinho uma vez por versão e quando ela fica pronta. */
   updatePrompt: boolean;
+  /** A versão cujas novidades estão abertas: a recém-instalada, na primeira abertura dela. */
+  whatsNew: string | null;
 
   init(): Promise<void>;
   setLocale(locale: Locale): void;
@@ -105,6 +107,7 @@ interface State {
   toggleApp(path: string): void;
   uninstallSelected(options?: UninstallOptionsDTO): Promise<UninstallResultDTO>;
   setUpdatePrompt(open: boolean): void;
+  closeWhatsNew(): void;
   setDiskBusy(busy: boolean): void;
 
   loadAi(): Promise<void>;
@@ -164,6 +167,7 @@ export const useStore = create<State>((set, get) => ({
 
   update: { status: 'idle' },
   updatePrompt: false,
+  whatsNew: null,
 
   async init() {
     if (!subscribed) {
@@ -196,6 +200,7 @@ export const useStore = create<State>((set, get) => ({
         });
       window.macleanfy.updates.onChange(receive);
       void window.macleanfy.updates.state().then(receive);
+      void window.macleanfy.system.whatsNew().then((whatsNew) => set({ whatsNew }));
     }
     await get().refresh();
   },
@@ -285,6 +290,10 @@ export const useStore = create<State>((set, get) => ({
 
   setUpdatePrompt(open) {
     set({ updatePrompt: open });
+  },
+
+  closeWhatsNew() {
+    set({ whatsNew: null });
   },
 
   setDiskBusy(busy) {

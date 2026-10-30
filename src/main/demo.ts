@@ -635,6 +635,9 @@ export function registerDemoIpc(): void {
     };
   });
   handle(CHANNELS.historyGet, () => history);
+  // A pasta de dados da demonstração nasce vazia a cada vez: as novidades cobririam toda captura.
+  // Para fotografar o aviso, `MACLEANFY_WHATS_NEW=0.1.4` o abre com as novidades dessa versão.
+  handle(CHANNELS.whatsNew, () => process.env.MACLEANFY_WHATS_NEW ?? null);
   handle(CHANNELS.updateState, () => ({ status: 'unsupported' }));
   for (const channel of [CHANNELS.updateCheck, CHANNELS.updateDownload, CHANNELS.updateInstall]) handle(channel, () => undefined);
 

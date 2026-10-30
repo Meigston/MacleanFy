@@ -11,6 +11,7 @@ function subscribe<T>(channel: string, listener: (payload: T) => void): Unsubscr
 const api: MacleanFyApi = {
   system: {
     info: () => ipcRenderer.invoke(CHANNELS.systemInfo),
+    whatsNew: () => ipcRenderer.invoke(CHANNELS.whatsNew),
     openFullDiskAccessSettings: () => ipcRenderer.invoke(CHANNELS.openFullDiskAccess),
     openExternal: (url) => ipcRenderer.invoke(CHANNELS.openExternal, url),
     reveal: (path) => ipcRenderer.invoke(CHANNELS.reveal, path),

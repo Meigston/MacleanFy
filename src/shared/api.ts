@@ -12,6 +12,7 @@ import type { PixOption } from './support';
 
 export const CHANNELS = {
   systemInfo: 'system:info',
+  whatsNew: 'system:whats-new',
   historyGet: 'history:get',
   scanRun: 'scan:run',
   scanProgress: 'scan:progress',
@@ -524,6 +525,8 @@ export type Unsubscribe = () => void;
 export interface MacleanFyApi {
   system: {
     info(): Promise<SystemInfo>;
+    /** A versão recém-instalada ou atualizada, só na primeira abertura dela; senão, nulo. */
+    whatsNew(): Promise<string | null>;
     openFullDiskAccessSettings(): Promise<void>;
     openExternal(url: string): Promise<void>;
     reveal(path: string): Promise<void>;
