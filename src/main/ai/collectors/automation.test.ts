@@ -114,7 +114,10 @@ describe('automation collectors', () => {
     const profile = async (name: string, hoursAgo: number, lockPid?: number) => {
       const dir = join(profiles(), name);
       await put(join(dir, 'Local State'), 30_000, hoursAgo / 24);
-      if (lockPid) await symlink(`MacBook-Pro-de-Ana-9.local-${lockPid}`, join(dir, 'SingletonLock'));
+      if (lockPid) {
+        await symlink(`MacBook-Pro-de-Ana-9.local-${lockPid}`, join(dir, 'SingletonLock'));
+        await age(join(dir, 'SingletonLock'), hoursAgo / 24);
+      }
       await age(dir, hoursAgo / 24);
       return dir;
     };

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
+import { lutimes, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { AI_COLD_DAYS } from '../../shared/api';
@@ -30,9 +30,10 @@ export async function put(path: string, content: string | number = 1024, daysAgo
   return path;
 }
 
+/** Muda a data do próprio caminho, sem seguir link: é a data que o `measure` lê. */
 export async function age(path: string, daysAgo: number): Promise<void> {
   const when = new Date(NOW - daysAgo * DAY);
-  await utimes(path, when, when);
+  await lutimes(path, when, when);
 }
 
 export interface FakeOptions {
