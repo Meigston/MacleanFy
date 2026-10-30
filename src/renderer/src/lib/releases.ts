@@ -19,11 +19,11 @@ export const RELEASE_NOTES: Record<string, Record<Locale, ReleaseNote[]>> = {
       },
       {
         title: 'Frio e quente',
-        text: 'O que está parado há mais de 7 dias aparece separado do que está em uso, por ferramenta ou por projeto. “Marcar o que está frio” só pega o que tem data de uso confiável.',
+        text: 'O que está parado há mais de 7 dias aparece como frio, junto com sobras como versões antigas e temporários sem dono; dá para ver por ferramenta ou por projeto. “Marcar o que está frio” só pega o que se sabe parado: modelos que só têm a data do download e conversas com imagens geradas ficam para você marcar à mão.',
       },
       {
         title: 'Sem perder trabalho',
-        text: 'Sessão aberta, app aberto e worktree com mudanças ficam bloqueados. Quase tudo vai para a Lixeira; worktrees saem pelo git, com o branch preservado, e modelos do Ollama pelo próprio Ollama. Configurações, credenciais e memórias nunca aparecem para remover.',
+        text: 'Sessão aberta, app aberto e worktree com mudanças ficam bloqueados. Quase tudo vai para a Lixeira, inclusive as worktrees, que depois saem da lista do git com o branch preservado. Modelos do Ollama saem pelo próprio Ollama, que precisa estar aberto, e são apagados de vez. Configurações, credenciais e memórias nunca aparecem para remover.',
       },
     ],
     en: [
@@ -33,17 +33,24 @@ export const RELEASE_NOTES: Record<string, Record<Locale, ReleaseNote[]>> = {
       },
       {
         title: 'Cold and hot',
-        text: 'What has sat unused for more than 7 days is kept apart from what is in use, by tool or by project. “Tick what is cold” only picks items with a reliable last-use date.',
+        text: 'Anything unused for more than 7 days shows as cold, along with leftovers such as old versions and orphaned temporary files; you can view it by tool or by project. “Tick what is cold” only picks what is known to be idle: models with only a download date and conversations with generated images are left for you to tick by hand.',
       },
       {
         title: 'No lost work',
-        text: 'Open sessions, open apps and worktrees with changes are locked. Almost everything goes to the Trash; worktrees are removed through git and keep their branch, and Ollama models through Ollama itself. Settings, credentials and memories are never offered for removal.',
+        text: 'Open sessions, open apps and worktrees with changes are locked. Almost everything goes to the Trash, worktrees included; git then drops them from its list and their branch stays. Ollama models are removed through Ollama, which must be running, and are deleted for good. Settings, credentials and memories are never offered for removal.',
       },
     ],
   },
 };
 
-/** As novidades da versão no idioma da interface; um beta mostra as da versão que ele antecede. */
+/** A versão das notas: um beta mostra as da versão que ele antecede. */
+const base = (version: string) => version.split('-')[0];
+
+export function hasReleaseNotes(version: string): boolean {
+  return Object.hasOwn(RELEASE_NOTES, base(version));
+}
+
+/** As novidades da versão no idioma da interface. */
 export function releaseNotes(version: string, locale: Locale): ReleaseNote[] | null {
-  return RELEASE_NOTES[version.split('-')[0]]?.[locale] ?? null;
+  return hasReleaseNotes(version) ? RELEASE_NOTES[base(version)][locale] : null;
 }

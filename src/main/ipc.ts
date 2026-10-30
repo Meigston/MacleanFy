@@ -141,7 +141,15 @@ export function registerIpc(): void {
 
   handle(CHANNELS.systemInfo, () => getSystemInfo());
   handle(CHANNELS.historyGet, () => history.read());
-  handle(CHANNELS.whatsNew, () => firstLaunchOf(app.getVersion(), join(app.getPath('userData'), 'last-version')));
+  // A resposta vale para o processo inteiro: recarregar a página com o aviso aberto o mostra de novo.
+  // Rodando do código-fonte, a pasta de dados é a mesma do app instalado; ali o aviso só abre com
+  // MACLEANFY_WHATS_NEW, para não gastar a primeira abertura do app de verdade nem cobrir capturas.
+  let whatsNew: Promise<string | null> | undefined;
+  handle(CHANNELS.whatsNew, () =>
+    app.isPackaged
+      ? (whatsNew ??= firstLaunchOf(app.getVersion(), join(app.getPath('userData'), 'last-version')))
+      : (process.env.MACLEANFY_WHATS_NEW ?? null)
+  );
 
   handle(CHANNELS.updateState, () => updateDemo ?? updater.current());
   handle(CHANNELS.updateCheck, () => updater.check(true));

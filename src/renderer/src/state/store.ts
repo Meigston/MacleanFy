@@ -17,6 +17,7 @@ import type {
 } from '../../../shared/api';
 import { initialLocale, persistLocale, type Locale } from '../i18n/locale';
 import { isRemovable, isSurelyCold } from '../lib/ai';
+import { hasReleaseNotes } from '../lib/releases';
 import { ALL_CATEGORY_IDS, type GroupRoute } from '../lib/catalog';
 
 export type Route =
@@ -200,7 +201,10 @@ export const useStore = create<State>((set, get) => ({
         });
       window.macleanfy.updates.onChange(receive);
       void window.macleanfy.updates.state().then(receive);
-      void window.macleanfy.system.whatsNew().then((whatsNew) => set({ whatsNew }));
+      // Versão sem notas não abre aviso nenhum, e um aviso que não abre não pode segurar o de atualização.
+      void window.macleanfy.system
+        .whatsNew()
+        .then((version) => set({ whatsNew: version && hasReleaseNotes(version) ? version : null }));
     }
     await get().refresh();
   },

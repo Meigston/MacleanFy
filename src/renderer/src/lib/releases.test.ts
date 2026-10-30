@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RELEASE_NOTES, releaseNotes } from './releases';
+import { RELEASE_NOTES, hasReleaseNotes, releaseNotes } from './releases';
 
 describe('releaseNotes', () => {
   it('finds the notes of a release and of the beta that comes before it', () => {
@@ -10,6 +10,9 @@ describe('releaseNotes', () => {
   it('has nothing for a version without notes', () => {
     expect(releaseNotes('0.1.3', 'pt-BR')).toBeNull();
     expect(releaseNotes('', 'en')).toBeNull();
+    expect(hasReleaseNotes('0.1.3')).toBe(false);
+    expect(hasReleaseNotes('constructor')).toBe(false);
+    expect(hasReleaseNotes('0.1.4-beta.2')).toBe(true);
   });
 
   it('says the same number of things in both languages', () => {
