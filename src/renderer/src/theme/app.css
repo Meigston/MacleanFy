@@ -1677,12 +1677,74 @@
 }
 
 .startup__row {
-  grid-template-columns: minmax(0, 1fr) 150px 190px 26px;
+  grid-template-columns: minmax(0, 1fr) 150px 190px 40px 26px;
+}
+
+.login-apps__row {
+  grid-template-columns: minmax(0, 1fr) 190px 40px 26px;
 }
 
 .startup__row:hover .item__reveal,
-.startup__row .item__reveal:focus-visible {
+.startup__row .item__reveal:focus-visible,
+.login-apps__row:hover .item__reveal,
+.login-apps__row .item__reveal:focus-visible,
+.startup__settings {
   opacity: 1;
+}
+
+.startup__failed {
+  color: var(--warning);
+  font-size: 12.5px;
+}
+
+/* Apps de "Abrir ao iniciar sessão" */
+
+.login-apps__ask {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-raised);
+}
+
+.login-apps__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent-300);
+}
+
+.login-apps__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.login-apps__text strong {
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.login-apps__actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.login-apps__ask .btn {
+  flex: none;
 }
 
 .startup__name {

@@ -13,6 +13,7 @@ import {
   Timer,
 } from 'lucide-react';
 import type { PerformanceSample } from '../../../shared/api';
+import { LoginApps } from '../components/LoginApps';
 import { StartupItems } from '../components/StartupItems';
 import { Button, Spinner } from '../components/ui';
 import { useT, type Translator } from '../i18n';
@@ -281,6 +282,7 @@ export function Performance() {
           <p className="card__sub">{t('perf.apps.note')}</p>
         </article>
 
+        <LoginApps />
         <StartupItems />
       </div>
     </section>

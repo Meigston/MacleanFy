@@ -14,6 +14,7 @@ type PluralKey =
   | 'related'
   | 'snapshot'
   | 'autostart'
+  | 'off'
   | 'broken'
   | 'systemfile'
   | 'session'

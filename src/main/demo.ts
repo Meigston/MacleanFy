@@ -10,6 +10,8 @@ import {
   type History,
   type InstalledAppDTO,
   type ItemDTO,
+  type LoginAppDTO,
+  type LoginAppsDTO,
   type PerformanceSample,
   type ProcessGroupDTO,
   type ScanResultDTO,
@@ -17,6 +19,7 @@ import {
   type SystemInfo,
 } from '../shared/api';
 import { COLLECTORS } from './ai/collectors';
+import { isToggleable } from './startup';
 import { getSystemInfo } from './system';
 
 /**
@@ -564,28 +567,46 @@ const STARTUP: StartupItemDTO[] = [
   { label: 'com.docker.vmnetd', app: 'Docker', scope: 'daemon', when: 'load', running: true },
   { label: 'com.nordvpn.macos.helper', app: 'NordVPN', scope: 'daemon', when: 'load', running: true },
   { label: 'com.spotify.webhelper', app: 'Spotify', scope: 'user', when: 'load', running: true },
+  { label: 'com.docker.helper', app: 'Docker', scope: 'helper', when: 'load' },
   { label: 'com.skype.skype.shareagent', app: null, scope: 'user', when: 'load', missing: true },
+  { label: 'com.dropbox.DropboxMacUpdate.agent', app: 'Dropbox', scope: 'user', when: 'schedule' },
   { label: 'com.google.keystone.agent', app: 'Google Chrome', scope: 'agent', when: 'schedule' },
   { label: 'com.parallels.desktop.launchdaemon', app: 'Parallels Desktop', scope: 'daemon', when: 'load', running: true },
   { label: 'com.evernote.EvernoteHelper', app: null, scope: 'user', when: 'load', missing: true },
+  { label: 'com.microsoft.OneDriveLauncher', app: 'OneDrive', scope: 'helper', when: 'load', disabled: true },
   { label: 'com.microsoft.update.agent', app: 'Microsoft AutoUpdate', scope: 'agent', when: 'schedule' },
   { label: 'org.postgresql.postgres', app: null, scope: 'daemon', when: 'load', running: true },
   { label: 'com.adobe.ARMDC.Communicator', app: null, scope: 'daemon', when: 'demand', disabled: true },
 ].map((item) => {
-  const folder =
-    item.scope === 'user' ? `${HOME}/Library/LaunchAgents` : item.scope === 'agent' ? '/Library/LaunchAgents' : '/Library/LaunchDaemons';
+  const scope = item.scope as StartupItemDTO['scope'];
+  const when = item.when as StartupItemDTO['when'];
+  const disabled = item.disabled ?? false;
+  const path =
+    scope === 'helper'
+      ? `/Applications/${item.app}.app/Contents/Library/LoginItems/${item.app} Helper.app`
+      : `${scope === 'user' ? `${HOME}/Library/LaunchAgents` : scope === 'agent' ? '/Library/LaunchAgents' : '/Library/LaunchDaemons'}/${item.label}.plist`;
   return {
     label: item.label,
-    path: `${folder}/${item.label}.plist`,
-    scope: item.scope as StartupItemDTO['scope'],
+    path,
+    scope,
     app: item.app,
     program: null,
-    when: item.when as StartupItemDTO['when'],
+    when,
     missing: item.missing ?? false,
-    disabled: item.disabled ?? false,
+    disabled,
     running: item.running ?? false,
+    toggleable: isToggleable({ scope, when, disabled }),
   };
 });
+
+/** "Abrir ao iniciar sessão" da conta de demonstração. */
+const LOGIN_APPS: LoginAppDTO[] = [
+  { name: 'Spotify', path: '/Applications/Spotify.app', hidden: false, off: false },
+  { name: 'Slack', path: '/Applications/Slack.app', hidden: false, off: false },
+  { name: 'Dropbox', path: '/Applications/Dropbox.app', hidden: true, off: false },
+  { name: 'Rectangle', path: '/Applications/Rectangle.app', hidden: false, off: false },
+  { name: 'Microsoft Teams', path: '/Applications/Microsoft Teams.app', hidden: false, off: false },
+];
 
 // ---------------------------------------------------------------------------
 // Os canais
@@ -743,9 +764,35 @@ export function registerDemoIpc(): void {
   });
 
   handle(CHANNELS.performanceSample, () => performanceSample(tick++));
+  const startup = STARTUP.map((item) => ({ ...item }));
   handle(CHANNELS.startupList, async () => {
     await sleep(300);
-    return STARTUP;
+    return startup.map((item) => ({ ...item }));
+  });
+  handle(CHANNELS.startupSetEnabled, async (_sender, path, on) => {
+    await sleep(250);
+    const item = startup.find((entry) => entry.path === path);
+    if (!item?.toggleable || typeof on !== 'boolean') return false;
+    item.disabled = !on;
+    return true;
+  });
+  // A permissão de Automação da demonstração: pedida no primeiro clique, nunca negada.
+  let loginGranted = false;
+  const loginApps = LOGIN_APPS.map((entry) => ({ ...entry }));
+  const loginList = (): LoginAppsDTO =>
+    loginGranted ? { status: 'granted', apps: loginApps.map((entry) => ({ ...entry })) } : { status: 'unasked', apps: [] };
+  handle(CHANNELS.loginApps, async (_sender, ask) => {
+    if (ask === true) {
+      await sleep(700);
+      loginGranted = true;
+    }
+    return loginList();
+  });
+  handle(CHANNELS.loginAppSet, async (_sender, path, on) => {
+    await sleep(300);
+    const entry = loginGranted ? loginApps.find((candidate) => candidate.path === path) : undefined;
+    if (entry && typeof on === 'boolean') entry.off = !on;
+    return { done: !!entry, list: loginList() };
   });
 
   /** O nó de um caminho da conta de demonstração, e o rastro até ele. */
@@ -867,6 +914,7 @@ export function registerDemoIpc(): void {
     CHANNELS.openExternal,
     CHANNELS.openFullDiskAccess,
     CHANNELS.openLoginItems,
+    CHANNELS.openAutomation,
     CHANNELS.openActivityMonitor,
     CHANNELS.copyPixCode,
   ]) {

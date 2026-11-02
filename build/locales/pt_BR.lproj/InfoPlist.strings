@@ -1,0 +1,2 @@
+/* O texto do pedido de Automação, quando o MacleanFy lê a lista "Abrir ao iniciar sessão". */
+"NSAppleEventsUsageDescription" = "O MacleanFy usa os Eventos do Sistema para ler e mudar a lista de apps que abrem ao entrar na conta. Nada muda sem você clicar.";

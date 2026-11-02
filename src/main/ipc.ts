@@ -21,6 +21,7 @@ import {
   type CleanSelection,
   type InstalledAppDTO,
   type MaintenanceTask,
+  type StartupItemDTO,
   type UninstallResultDTO,
   type UpdateState,
 } from '../shared/api';
@@ -32,7 +33,8 @@ import { DiskMap } from './disk';
 import { Engine } from './engine';
 import { HistoryStore } from './history';
 import { PerformanceMonitor } from './perf/monitor';
-import { listStartupItems, readStartupPlists } from './startup';
+import { LoginApps } from './login-apps';
+import { listStartupItems, readStartupPlists, setStartupEnabled } from './startup';
 import { removalScript, systemFilesOf, type SystemFile } from './system-files';
 import { getMaintenanceInfo, getSystemInfo, runAsAdmin, runMaintenance, setNoDsStore } from './system';
 import { Updater } from './updater';
@@ -41,6 +43,7 @@ import { firstLaunchOf } from './whats-new';
 const FULL_DISK_ACCESS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
 const ACTIVITY_MONITOR = '/System/Applications/Utilities/Activity Monitor.app';
 const LOGIN_ITEMS_URL = 'x-apple.systempreferences:com.apple.LoginItems-Settings.extension';
+const AUTOMATION_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation';
 
 /** A primeira busca por versão nova espera o app assentar; depois, uma por dia enquanto ele estiver aberto. */
 const UPDATE_FIRST_CHECK_MS = 10 * 1000;
@@ -104,8 +107,10 @@ export function registerIpc(): void {
   // Apps devolvidos pela última listagem, por caminho do bundle, e o que cada um deixou em /Library.
   let knownApps = new Map<string, AppInfo>();
   let knownSystem = new Map<string, Array<SystemFile & { size: number }>>();
-  // Plists de inicialização da última listagem: só eles podem ser mostrados no Finder.
-  let knownStartup = new Set<string>();
+  // Itens de inicialização da última listagem: só eles podem ser mostrados no Finder, ligados e desligados.
+  let knownStartup = new Map<string, StartupItemDTO>();
+  // A permissão do System Events é do app instalado; rodando do código-fonte, quem pede é o Electron.
+  const loginApps = new LoginApps(join(app.getPath('userData'), app.isPackaged ? 'login-apps.json' : 'login-apps-dev.json'));
   // O mapa do espaço da conta, e o que a última pasta listada mostrou.
   const disk = new DiskMap();
   let knownDisk = new Map<string, number>();
@@ -311,11 +316,25 @@ export function registerIpc(): void {
 
   handle(CHANNELS.startupList, async () => {
     const items = await listStartupItems();
-    knownStartup = new Set(items.map((item) => item.path));
+    knownStartup = new Map(items.map((item) => [item.path, item]));
     return items;
   });
-  // Ligar e desligar fica com os Ajustes, que mostram o que cada item é e pedem a senha quando precisa.
+  handle(CHANNELS.startupSetEnabled, async (_sender, path: unknown, on: unknown) => {
+    const item = typeof path === 'string' ? knownStartup.get(path) : undefined;
+    if (!item?.toggleable || typeof on !== 'boolean') return false;
+    const done = await setStartupEnabled(item.label, on);
+    if (done) knownStartup.set(item.path, { ...item, disabled: !on });
+    return done;
+  });
+  handle(CHANNELS.loginApps, (_sender, ask: unknown) => loginApps.list(ask === true));
+  handle(CHANNELS.loginAppSet, async (_sender, path: unknown, on: unknown) =>
+    typeof path === 'string' && typeof on === 'boolean'
+      ? loginApps.set(path, on)
+      : { done: false, list: await loginApps.list() }
+  );
+  // O que o app não desliga sozinho fica com os Ajustes, que pedem a senha quando precisa.
   handle(CHANNELS.openLoginItems, () => shell.openExternal(LOGIN_ITEMS_URL));
+  handle(CHANNELS.openAutomation, () => shell.openExternal(AUTOMATION_URL));
 
   handle(CHANNELS.maintenanceInfo, () => getMaintenanceInfo());
   handle(CHANNELS.maintenanceRun, (_sender, task: MaintenanceTask) => runMaintenance(task));
@@ -336,7 +355,7 @@ export function registerIpc(): void {
     if (typeof path !== 'string') return;
     const isRelated = [...knownApps.values()].some((info) => info.related.some((r) => r.path === path));
     const isSystem = [...knownSystem.values()].some((files) => files.some((file) => file.path === path));
-    if (engine.knows(path) || knownApps.has(path) || isRelated || isSystem || knownStartup.has(path) || knownDisk.has(path) || ai.knows(path)) {
+    if (engine.knows(path) || knownApps.has(path) || isRelated || isSystem || knownStartup.has(path) || loginApps.knows(path) || knownDisk.has(path) || ai.knows(path)) {
       shell.showItemInFolder(path);
     }
   });

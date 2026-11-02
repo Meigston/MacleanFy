@@ -5,15 +5,24 @@ vi.mock('node:os', async (original) => ({ ...(await original<typeof import('node
 import type { StartupItemDTO } from '../shared/api';
 import {
   STARTUP_FOLDERS,
+  describeHelper,
   describeStartupItem,
+  helperCandidates,
+  isLoginHelper,
+  isToggleable,
+  outermostApp,
   ownerApp,
+  parseAppPaths,
   parseDisabled,
   parseLaunchctlList,
   parsePlistReadings,
+  parseServiceLabels,
+  parseServicePrint,
   parseSystemServices,
   sortStartupItems,
   startupWhen,
   type PlistReading,
+  type ServiceInfo,
   type StartupContext,
 } from './startup';
 
@@ -34,6 +43,7 @@ function item(partial: Partial<StartupItemDTO>): StartupItemDTO {
     missing: false,
     disabled: false,
     running: false,
+    toggleable: false,
     ...partial,
   };
 }
@@ -203,7 +213,21 @@ describe('startup items', () => {
       // O que o launchd guarda por cima vale mais que o plist.
       disabled: false,
       running: true,
+      toggleable: true,
     });
+  });
+
+  it('turns on and off only what loads in your session and opens on its own', () => {
+    expect(isToggleable({ scope: 'user', when: 'load', disabled: false })).toBe(true);
+    expect(isToggleable({ scope: 'agent', when: 'schedule', disabled: false })).toBe(true);
+    expect(isToggleable({ scope: 'helper', when: 'load', disabled: true })).toBe(true);
+    // Serviço do sistema pede a senha: fica com os Ajustes.
+    expect(isToggleable({ scope: 'daemon', when: 'load', disabled: false })).toBe(false);
+    // Só o root lê o plist: o rótulo vem do nome do arquivo e pode não ser o de verdade.
+    expect(isToggleable({ scope: 'user', when: 'unknown', disabled: false })).toBe(false);
+    // Quando chamado não abre sozinho; desligar só quebraria quem chama. Desligado, volta.
+    expect(isToggleable({ scope: 'user', when: 'demand', disabled: false })).toBe(false);
+    expect(isToggleable({ scope: 'user', when: 'demand', disabled: true })).toBe(true);
   });
 
   it('flags an item whose program is gone', () => {
@@ -246,5 +270,120 @@ describe('startup items', () => {
       item({ label: 'x', when: 'demand', missing: true }),
     ]);
     expect(sorted.map((entry) => entry.label)).toEqual(['x', 'a', 'z', 'b', 'c', 'd']);
+  });
+
+  describe('login helpers', () => {
+    const SESSION = [
+      'com.apple.xpc.launchd.domain.user.501 = {',
+      '\ttype = login',
+      '\tservices = {',
+      '\t\t   7784      - \tcom.lwouis.alt-tab-macos',
+      '\t\t      0      0 \tcom.spotify.client.startuphelper',
+      '\t\t   8574      - \tapplication.com.zzd.Xnip.2925543.2925724',
+      '\t\t      0      0 \tcom.apple.Siri.agent',
+      '\t}',
+      '',
+      '\tunmanaged processes = {',
+      '\t\t   901      - \t0x7f8c',
+      '\t}',
+    ].join('\n');
+
+    it('reads every service label of a session, running or not', () => {
+      expect(parseServiceLabels(SESSION)).toEqual([
+        'com.lwouis.alt-tab-macos',
+        'com.spotify.client.startuphelper',
+        'application.com.zzd.Xnip.2925543.2925724',
+        'com.apple.Siri.agent',
+      ]);
+      expect(parseServiceLabels('')).toEqual([]);
+    });
+
+    it('reads who submitted a service and for which app', () => {
+      const helper = parseServicePrint(
+        [
+          'gui/501/com.spotify.client.startuphelper = {',
+          '\tactive count = 0',
+          '\tpath = (submitted by smd.330)',
+          '\ttype = Submitted',
+          '\tstate = not running',
+          '\tprogram identifier = com.spotify.client.startuphelper (mode: 1)',
+          '\tparent bundle identifier = com.spotify.client',
+          '}',
+        ].join('\n')
+      );
+      expect(helper).toEqual({ submittedBy: 'smd', plist: null, parent: 'com.spotify.client', running: false });
+
+      const agent = parseServicePrint(
+        ['gui/501/com.logi.cp-dev-mgr = {', '\tpath = /Library/LaunchAgents/com.logi.optionsplus.plist', '\tstate = running', '}'].join('\n')
+      );
+      expect(agent).toEqual({ submittedBy: null, plist: '/Library/LaunchAgents/com.logi.optionsplus.plist', parent: null, running: true });
+
+      // Fora do launchd, o print falha e não sobra nada.
+      expect(parseServicePrint('')).toBeNull();
+    });
+
+    it('tells a login helper from anything else launchd runs', () => {
+      const info = (partial: Partial<ServiceInfo>): ServiceInfo => ({ submittedBy: null, plist: null, parent: null, running: false, ...partial });
+      expect(isLoginHelper(info({ submittedBy: 'smd' }))).toBe(true);
+      expect(isLoginHelper(info({ plist: '/Applications/Vendor.app/Contents/Library/LaunchAgents/com.vendor.agent.plist' }))).toBe(true);
+      // O ShipIt é o atualizador do próprio app, cadastrado por ele enquanto roda.
+      expect(isLoginHelper(info({ submittedBy: 'Granola' }))).toBe(false);
+      expect(isLoginHelper(info({ plist: '/System/Library/LaunchAgents/com.openssh.ssh-agent.plist' }))).toBe(false);
+    });
+
+    it('looks only at labels that are not plists, apps or Apple', () => {
+      const labels = [...parseServiceLabels(SESSION), 'com.spotify.client.startuphelper', 'com.docker.helper', '0x7f8c'];
+      expect(helperCandidates(labels, new Set(['com.lwouis.alt-tab-macos']))).toEqual([
+        'com.spotify.client.startuphelper',
+        'com.docker.helper',
+      ]);
+    });
+
+    it('names the app outside a path', () => {
+      expect(outermostApp('/Applications/Spotify.app/Contents/Library/LoginItems/StartUpHelper.app')).toBe('Spotify');
+      expect(outermostApp('/Applications/macOS InstantView.app')).toBe('macOS InstantView');
+      expect(outermostApp('/usr/local/bin/tool')).toBeNull();
+    });
+
+    it('reads where macOS finds each app and drops the rest', () => {
+      expect(parseAppPaths('{"com.a":"/Applications/A.app","com.b":3,"com.c":"relative"}')).toEqual({ 'com.a': '/Applications/A.app' });
+      expect(parseAppPaths('[]')).toEqual({});
+      expect(parseAppPaths('nope')).toEqual({});
+    });
+
+    const SPOTIFY_HELPER = '/Applications/Spotify.app/Contents/Library/LoginItems/StartUpHelper.app';
+    const APPS = { 'com.spotify.client.startuphelper': SPOTIFY_HELPER, 'com.spotify.client': '/Applications/Spotify.app' };
+    const SMD: ServiceInfo = { submittedBy: 'smd', plist: null, parent: 'com.spotify.client', running: false };
+
+    it('describes a helper registered by its app', () => {
+      expect(describeHelper('com.spotify.client.startuphelper', SMD, false, APPS)).toEqual({
+        label: 'com.spotify.client.startuphelper',
+        path: SPOTIFY_HELPER,
+        scope: 'helper',
+        app: 'Spotify',
+        program: SPOTIFY_HELPER,
+        when: 'load',
+        missing: false,
+        disabled: false,
+        running: false,
+        toggleable: true,
+      });
+    });
+
+    it('keeps a helper turned off, as long as its app is still there', () => {
+      expect(describeHelper('com.spotify.client.startuphelper', null, true, APPS)).toMatchObject({ disabled: true, toggleable: true });
+      // Cadastro antigo de um app que não tem mais o ajudante: não abre nada.
+      expect(describeHelper('com.openai.chat-helper', null, true, APPS)).toBeNull();
+      expect(describeHelper('com.openai.chat-helper', null, false, APPS)).toBeNull();
+    });
+
+    it('falls back to the parent app when the helper bundle is not found', () => {
+      const described = describeHelper('com.vendor.helper', { ...SMD, parent: 'com.spotify.client' }, undefined, APPS);
+      expect(described).toMatchObject({ path: '/Applications/Spotify.app', app: 'Spotify', program: null });
+    });
+
+    it('skips services that are not login helpers', () => {
+      expect(describeHelper('com.granola.app.ShipIt', { ...SMD, submittedBy: 'Granola', parent: null }, undefined, APPS)).toBeNull();
+    });
   });
 });

@@ -62,10 +62,19 @@ module.exports = {
     ...(developerId ? {} : { identity: '-' }),
     // O hardened runtime é exigido pela notarização, e com assinatura ad-hoc impede o app de abrir.
     hardenedRuntime: developerId,
+    // As permissões do modelo do electron-builder, mais a de pedir para controlar o System Events.
+    entitlements: 'build/entitlements.mac.plist',
     extendInfo: {
       LSMinimumSystemVersion: '12.0',
       NSHumanReadableCopyright: 'Copyright © 2026 Meigston Ramos. Baseado no mac-cleaner-cli (MIT).',
+      // O texto do pedido de Automação; a tradução fica em build/locales.
+      NSAppleEventsUsageDescription:
+        'MacleanFy uses System Events to read and change the list of apps that open when you log in. Nothing changes until you click.',
     },
+    extraResources: [
+      { from: 'build/locales/en.lproj/InfoPlist.strings', to: 'en.lproj/InfoPlist.strings' },
+      { from: 'build/locales/pt_BR.lproj/InfoPlist.strings', to: 'pt_BR.lproj/InfoPlist.strings' },
+    ],
   },
 
   dmg: {

@@ -53,9 +53,13 @@ recomendações do que limpar primeiro.
 **Desempenho.** Processador por núcleo, memória e pressão, swap, disco, rede, bateria e os
 apps que mais pesam, atualizando a cada 2 segundos. O diagnóstico aponta por que o Mac pode
 estar lento — memória no limite, swap alto, processador ocupado há minutos, processo preso
-num laço, Spotlight indexando, Mac quente, dias demais sem reiniciar — e só lê: nada é
-encerrado. Embaixo, os itens em segundo plano de outros fabricantes, com quando cada um roda
-e os quebrados, que apontam para programas que não existem mais.
+num laço, Spotlight indexando, Mac quente, dias demais sem reiniciar — sem encerrar nada.
+Embaixo, o que abre sozinho: os apps de "Abrir ao iniciar sessão" e os itens em segundo
+plano de outros fabricantes, com quando cada um roda e os quebrados, que apontam para
+programas que não existem mais. Os que abrem sozinhos têm um botão para desligar, só na sua
+conta e a partir do próximo login; os serviços do sistema, que pedem a senha de
+administrador, abrem Itens de Início nos Ajustes. A lista dos apps só aparece depois que
+você deixa o MacleanFy controlar os Eventos do Sistema, que o macOS pergunta uma vez.
 
 **Limpeza.** Dezessete categorias em cinco grupos. Cada uma traz o nível de risco, e dá para
 abrir a categoria e escolher item a item.

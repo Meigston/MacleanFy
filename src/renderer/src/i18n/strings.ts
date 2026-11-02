@@ -108,7 +108,7 @@ export const pt = {
   'uninstaller.dialog.system':
     '{count} ficam fora da sua conta, em /Library. O macOS vai pedir a senha de administrador, e eles são apagados de vez, sem passar pela Lixeira.',
 
-  'perf.subtitle': 'Atualiza a cada 2 segundos. Só lê: nada é encerrado nem alterado.',
+  'perf.subtitle': 'Atualiza a cada 2 segundos. Nada é encerrado: desligar o que abre sozinho vale a partir do próximo login.',
   'perf.activityMonitor': 'Abrir o Monitor de Atividade',
   'perf.diagnosis': 'Por que o Mac pode estar lento',
   'perf.diagnosis.none.title': 'Nada fora do normal agora',
@@ -184,7 +184,28 @@ export const pt = {
   'perf.startup.less': 'Mostrar menos',
   'perf.startup.empty': 'Nenhum app de outro fabricante roda sozinho neste Mac.',
   'perf.startup.note':
-    'Só itens de outros fabricantes; os da Apple ficam de fora. Para ligar e desligar, use Itens de Início nos Ajustes do Mac. Um item quebrado é sobra de app removido: os da sua conta saem pela Limpeza, em Launch agents órfãos; os outros, pelo Finder, com a senha de administrador.',
+    'Só itens de outros fabricantes; os da Apple ficam de fora. Desligar vale a partir do próximo login e só na sua conta: o que está aberto continua aberto. Serviços do sistema pedem a senha de administrador e ficam com Itens de Início, nos Ajustes do Mac. Um item quebrado é sobra de app removido: os da sua conta saem pela Limpeza, em Launch agents órfãos; os outros, pelo Finder, com a senha de administrador.',
+  'perf.startup.scope.helper': 'Ajudante de login',
+  'perf.startup.toggle': '{name}: abrir sozinho',
+  'perf.startup.toggle.settings': 'Desligar nos Ajustes: serviço do sistema pede a senha',
+  'perf.startup.failed': '{name} não mudou. Use Itens de Início, nos Ajustes do Mac.',
+  'perf.login': 'Apps ao entrar na conta',
+  'perf.login.ask.title': 'Ver os apps que abrem com a sua conta',
+  'perf.login.ask.text':
+    'O macOS só mostra essa lista com a sua permissão. Ao clicar, ele pergunta uma vez se o MacleanFy pode controlar os Eventos do Sistema: é por eles que o app lê a lista e tira ou põe um app nela.',
+  'perf.login.ask': 'Mostrar apps',
+  'perf.login.asking': 'Esperando a sua resposta…',
+  'perf.login.denied':
+    'Sem permissão para ler a lista. Libere o MacleanFy em Automação, nos Ajustes do Mac, ou desligue cada app em Itens de Início.',
+  'perf.login.automation': 'Abrir Automação',
+  'perf.login.retry': 'Tentar de novo',
+  'perf.login.error': 'Os Eventos do Sistema não responderam. Tente de novo, ou use Itens de Início nos Ajustes do Mac.',
+  'perf.login.empty': 'Nenhum app abre sozinho ao entrar na conta.',
+  'perf.login.on': 'Abre ao entrar na conta',
+  'perf.login.hidden': 'Abre escondido',
+  'perf.login.toggle': '{name}: abrir ao entrar na conta',
+  'perf.login.note':
+    'Desligar tira o app da lista: ele não abre mais sozinho a partir do próximo login, continua aberto agora e volta com um clique. Um app que se cadastra de outro jeito pode não aparecer aqui; a lista completa está em Itens de Início.',
 
   'disk.subtitle': 'Onde está o espaço da sua pasta pessoal. Clique numa pasta para entrar nela.',
   'disk.intro.title': 'Medir a pasta pessoal',
@@ -460,6 +481,8 @@ export const pt = {
   'plural.autostart.other': '{n} abrem sozinhos',
   'plural.broken.one': '{n} quebrado',
   'plural.broken.other': '{n} quebrados',
+  'plural.off.one': '{n} desligado',
+  'plural.off.other': '{n} desligados',
   'plural.systemfile.one': '{n} arquivo do sistema',
   'plural.systemfile.other': '{n} arquivos do sistema',
   'plural.session.one': '{n} sessão',
@@ -576,7 +599,7 @@ export const en: Record<StringKey, string> = {
   'uninstaller.dialog.system':
     '{count} live outside your account, in /Library. macOS will ask for the administrator password, and they are deleted for good, without going to the Trash.',
 
-  'perf.subtitle': 'Refreshes every 2 seconds. Read-only: nothing is quit or changed.',
+  'perf.subtitle': 'Refreshes every 2 seconds. Nothing is quit: turning off what opens on its own takes effect at your next login.',
   'perf.activityMonitor': 'Open Activity Monitor',
   'perf.diagnosis': 'Why your Mac may be slow',
   'perf.diagnosis.none.title': 'Nothing out of the ordinary right now',
@@ -652,7 +675,28 @@ export const en: Record<StringKey, string> = {
   'perf.startup.less': 'Show less',
   'perf.startup.empty': 'No third-party app runs on its own on this Mac.',
   'perf.startup.note':
-    'Third-party items only; Apple’s are left out. To turn one on or off, use Login Items in your Mac’s settings. A broken item is left over from a removed app: the ones in your account go through Cleaning, under Orphaned Launch Agents; the others through Finder, with the administrator password.',
+    'Third-party items only; Apple’s are left out. Turning one off takes effect at your next login and only in your account: what is open stays open. System services need the administrator password and are left to Login Items in your Mac’s settings. A broken item is left over from a removed app: the ones in your account go through Cleaning, under Orphaned Launch Agents; the others through Finder, with the administrator password.',
+  'perf.startup.scope.helper': 'Login helper',
+  'perf.startup.toggle': '{name}: open on its own',
+  'perf.startup.toggle.settings': 'Turn off in Settings: system services need your password',
+  'perf.startup.failed': '{name} did not change. Use Login Items in your Mac’s settings.',
+  'perf.login': 'Apps at login',
+  'perf.login.ask.title': 'See the apps that open when you log in',
+  'perf.login.ask.text':
+    'macOS shows this list only with your permission. When you click, it asks once whether MacleanFy may control System Events, which is how the app reads the list and adds or removes an app.',
+  'perf.login.ask': 'Show apps',
+  'perf.login.asking': 'Waiting for your answer…',
+  'perf.login.denied':
+    'No permission to read the list. Allow MacleanFy under Automation in your Mac’s settings, or turn each app off in Login Items.',
+  'perf.login.automation': 'Open Automation',
+  'perf.login.retry': 'Try again',
+  'perf.login.error': 'System Events did not answer. Try again, or use Login Items in your Mac’s settings.',
+  'perf.login.empty': 'No app opens on its own when you log in.',
+  'perf.login.on': 'Opens at login',
+  'perf.login.hidden': 'Opens hidden',
+  'perf.login.toggle': '{name}: open at login',
+  'perf.login.note':
+    'Turning an app off removes it from the list: it no longer opens on its own from your next login, stays open for now and comes back with one click. An app that signs up some other way may be missing here; the full list is in Login Items.',
 
   'disk.subtitle': 'Where the space in your home folder goes. Click a folder to step into it.',
   'disk.intro.title': 'Measure your home folder',
@@ -926,6 +970,8 @@ export const en: Record<StringKey, string> = {
   'plural.autostart.other': '{n} open on their own',
   'plural.broken.one': '{n} broken',
   'plural.broken.other': '{n} broken',
+  'plural.off.one': '{n} turned off',
+  'plural.off.other': '{n} turned off',
   'plural.systemfile.one': '{n} system file',
   'plural.systemfile.other': '{n} system files',
   'plural.related.one': '{n} related file',

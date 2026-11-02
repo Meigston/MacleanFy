@@ -25,6 +25,9 @@ export const CHANNELS = {
   maintenanceInfo: 'maintenance:info',
   maintenanceNoDsStore: 'maintenance:no-ds-store',
   startupList: 'startup:list',
+  startupSetEnabled: 'startup:set-enabled',
+  loginApps: 'startup:login-apps',
+  loginAppSet: 'startup:login-app-set',
   diskList: 'disk:list',
   diskProgress: 'disk:progress',
   diskTrash: 'disk:trash',
@@ -32,6 +35,7 @@ export const CHANNELS = {
   aiProgress: 'ai:progress',
   aiRemove: 'ai:remove',
   openLoginItems: 'shell:login-items',
+  openAutomation: 'shell:automation',
   openFullDiskAccess: 'shell:full-disk-access',
   openExternal: 'shell:open-external',
   reveal: 'shell:reveal',
@@ -410,18 +414,21 @@ export interface AiRemoveResultDTO {
   failed: Array<{ id: string; blocked?: AiBlock }>;
 }
 
-/** De quem é o item: da sua conta, de todas as contas ou do sistema. */
-export type StartupScope = 'user' | 'agent' | 'daemon';
+/**
+ * De quem é o item: da sua conta, de todas as contas, do sistema, ou o ajudante que um app
+ * cadastra para abrir junto com a conta.
+ */
+export type StartupScope = 'user' | 'agent' | 'daemon' | 'helper';
 /**
  * Ao carregar (entrar na conta, ou ligar o Mac para o sistema), de tempos em tempos ou quando
  * chamado; `unknown` quando só o root lê o plist.
  */
 export type StartupWhen = 'load' | 'schedule' | 'demand' | 'unknown';
 
-/** Algo que o launchd abre sozinho. Só para ler: desligar fica com os Ajustes do Mac. */
+/** Algo que o launchd abre sozinho. */
 export interface StartupItemDTO {
   label: string;
-  /** O plist que cadastra o item; é ele que "Mostrar no Finder" aponta. */
+  /** O plist que cadastra o item, ou o app do ajudante; é ele que "Mostrar no Finder" aponta. */
   path: string;
   scope: StartupScope;
   /** Nome do app dono, quando dá para saber. */
@@ -432,6 +439,32 @@ export interface StartupItemDTO {
   missing: boolean;
   disabled: boolean;
   running: boolean;
+  /**
+   * O MacleanFy liga e desliga o item, só na sua conta. Serviços do sistema pedem a senha de
+   * administrador e ficam com os Ajustes do Mac.
+   */
+  toggleable: boolean;
+}
+
+/** Um app da lista "Abrir ao iniciar sessão" dos Ajustes. */
+export interface LoginAppDTO {
+  name: string;
+  path: string;
+  /** Abre escondido. */
+  hidden: boolean;
+  /** Tirado da lista pelo MacleanFy: não abre mais sozinho e pode voltar. */
+  off: boolean;
+}
+
+/**
+ * `unasked`: o macOS ainda não perguntou se o MacleanFy pode ler a lista; `denied`: a pessoa
+ * não deixou; `error`: o System Events não respondeu.
+ */
+export type LoginAppsStatus = 'unasked' | 'granted' | 'denied' | 'error';
+
+export interface LoginAppsDTO {
+  status: LoginAppsStatus;
+  apps: LoginAppDTO[];
 }
 
 export type ThermalState = 'unknown' | 'nominal' | 'fair' | 'serious' | 'critical';
@@ -573,8 +606,22 @@ export interface MacleanFyApi {
   };
   startup: {
     list(): Promise<StartupItemDTO[]>;
+    /**
+     * Só itens da última lista que o app sabe ligar e desligar. Vale a partir do próximo login:
+     * o que está aberto continua aberto. Verdadeiro se o macOS confirmou a mudança.
+     */
+    setEnabled(path: string, on: boolean): Promise<boolean>;
+    /**
+     * Os apps de "Abrir ao iniciar sessão", lidos pelo System Events. Só com `ask` o macOS
+     * pergunta pela permissão; sem ele, a lista só vem se a permissão já foi dada antes.
+     */
+    loginApps(ask?: boolean): Promise<LoginAppsDTO>;
+    /** Só apps da última lista. `done` diz se o macOS fez a mudança; `list` é a lista lida depois. */
+    setLoginApp(path: string, on: boolean): Promise<{ done: boolean; list: LoginAppsDTO }>;
     /** Ajustes → Geral → Itens de Início, onde se liga e desliga cada um. */
     openSettings(): Promise<void>;
+    /** Ajustes → Privacidade e Segurança → Automação, para devolver a permissão negada. */
+    openAutomationSettings(): Promise<void>;
   };
   maintenance: {
     info(): Promise<MaintenanceInfo>;
