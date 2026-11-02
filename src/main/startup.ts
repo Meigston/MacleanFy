@@ -9,8 +9,8 @@ import type { StartupItemDTO, StartupScope, StartupWhen } from '../shared/api';
  * cadastram para abrir junto com ela e serviços do sistema ao ligar o Mac.
  *
  * Ligar e desligar mexe só na lista de desligados da sua sessão no launchd
- * (`launchctl enable`/`disable` em gui/<uid>), a mesma que os Ajustes usam: não
- * apaga nem edita plist e não pede senha. Serviços do sistema pediriam a senha de
+ * (`launchctl enable`/`disable` em gui/<uid>), a mesma que o SMLoginItemSetEnabled
+ * dos apps usa: não apaga nem edita plist e não pede senha. Serviços do sistema pediriam a senha de
  * administrador e ficam com Ajustes → Itens de Início. Apagar os quebrados da pasta
  * pessoal fica com a Limpeza, na categoria de launch agents órfãos.
  *
@@ -192,6 +192,7 @@ export function describeStartupItem(
   const when = startupWhen(reading);
   const disabled = context.overrides.get(label) ?? reading.disabled === true;
   return {
+    id: reading.path,
     label,
     path: reading.path,
     scope,
@@ -223,6 +224,8 @@ export interface ServiceInfo {
   /** O app que cadastrou o ajudante. */
   parent: string | null;
   running: boolean;
+  /** Abre ao carregar: RunAtLoad ou KeepAlive, nas propriedades que o launchd mostra. */
+  runAtLoad: boolean;
 }
 
 export function parseServicePrint(output: string): ServiceInfo | null {
@@ -234,6 +237,7 @@ export function parseServicePrint(output: string): ServiceInfo | null {
     plist: submitted ? null : path,
     parent: output.match(/^\tparent bundle identifier = (.+)$/m)?.[1]?.trim() ?? null,
     running: /^\tstate = running$/m.test(output),
+    runAtLoad: /\b(?:runatload|keepalive)\b/.test(output.match(/^\tproperties = (.+)$/m)?.[1] ?? ''),
   };
 }
 
@@ -264,8 +268,10 @@ export function helperCandidates(labels: Iterable<string>, plistLabels: Set<stri
 
 /**
  * Um ajudante, com o que o launchd diz dele (nulo quando não está carregado) e onde o
- * macOS acha os apps. Desligado e fora do launchd, só conta se o app do ajudante ainda
- * existe dentro de outro app: senão é sobra de cadastro antigo e não abre nada.
+ * macOS acha os apps. Fora do launchd, só conta desligado e com o app do ajudante ainda
+ * dentro de outro app: senão é sobra de cadastro antigo e não abre nada. O ajudante de
+ * LoginItems existe para abrir ao entrar na conta; o agente com plist dentro do app só
+ * abre sozinho se o plist pede, e sem isso é "quando chamado" e não ganha interruptor.
  */
 export function describeHelper(
   label: string,
@@ -276,22 +282,25 @@ export function describeHelper(
   if (info && !isLoginHelper(info)) return null;
   const bundle = apps[label];
   const inside = bundle && /\.app\/Contents\/Library\/LoginItems\/[^/]+\.app$/.test(bundle) ? bundle : undefined;
-  if (!info && (disabled === undefined || !inside)) return null;
+  if (!info && (disabled !== true || !inside)) return null;
   const path = inside ?? info?.plist ?? (info?.parent ? apps[info.parent] : undefined) ?? bundle;
   if (!path) return null;
   const parentApp = info?.parent ? apps[info.parent] : undefined;
   const isDisabled = disabled === true;
+  const when = info?.plist && !info.runAtLoad ? 'demand' : 'load';
   return {
+    // O caminho pode ser o do app dono, que dois ajudantes dividem; o rótulo, não.
+    id: `helper:${label}`,
     label,
     path,
     scope: 'helper',
     app: outermostApp(path) ?? (parentApp ? outermostApp(parentApp) : null),
     program: inside ?? null,
-    when: 'load',
+    when,
     missing: false,
     disabled: isDisabled,
     running: info?.running ?? false,
-    toggleable: isToggleable({ scope: 'helper', when: 'load', disabled: isDisabled }),
+    toggleable: isToggleable({ scope: 'helper', when, disabled: isDisabled }),
   };
 }
 
@@ -462,8 +471,7 @@ export async function listStartupItems(): Promise<StartupItemDTO[]> {
     [...readings.values()].map((reading) => reading.label ?? basename(reading.path).replace(/\.plist$/, ''))
   );
   const helpers = await listHelpers(uid, plistLabels, userOverrides, session).catch(() => []);
-  const known = new Set(items.map((item) => item.path));
-  return sortStartupItems([...items, ...helpers.filter((helper) => !known.has(helper.path))]);
+  return sortStartupItems([...items, ...helpers]);
 }
 
 /**
@@ -473,6 +481,7 @@ export async function listStartupItems(): Promise<StartupItemDTO[]> {
 export async function setStartupEnabled(label: string, on: boolean): Promise<boolean> {
   const uid = process.getuid?.() ?? 0;
   await run('/bin/launchctl', [on ? 'enable' : 'disable', `gui/${uid}/${label}`]);
+  // Os dois comandos escrevem o rótulo na lista; sem ele lá, nada se confirma.
   const overrides = parseDisabled(await run('/bin/launchctl', ['print-disabled', `gui/${uid}`]));
-  return (overrides.get(label) ?? false) === !on;
+  return overrides.get(label) === !on;
 }

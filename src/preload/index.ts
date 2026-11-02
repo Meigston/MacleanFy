@@ -49,7 +49,7 @@ const api: MacleanFyApi = {
   },
   startup: {
     list: () => ipcRenderer.invoke(CHANNELS.startupList),
-    setEnabled: (path, on) => ipcRenderer.invoke(CHANNELS.startupSetEnabled, path, on),
+    setEnabled: (id, on) => ipcRenderer.invoke(CHANNELS.startupSetEnabled, id, on),
     loginApps: (ask) => ipcRenderer.invoke(CHANNELS.loginApps, ask === true),
     setLoginApp: (path, on) => ipcRenderer.invoke(CHANNELS.loginAppSet, path, on),
     openSettings: () => ipcRenderer.invoke(CHANNELS.openLoginItems),

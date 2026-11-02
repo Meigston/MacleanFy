@@ -82,8 +82,12 @@ export function parseLoginItems(output: string): LoginApp[] {
 }
 
 interface State {
-  /** A lista já foi lida uma vez: o macOS deu a permissão e abrir a tela não pergunta nada. */
-  granted: boolean;
+  /**
+   * O time da assinatura do app quando o macOS deu a permissão. Com o mesmo time, abrir
+   * a tela lê a lista sem perguntar nada. Com outro, ou num build sem Developer ID, o
+   * macOS pode não reconhecer a resposta e perguntaria de novo: aí a lista espera o clique.
+   */
+  grantedTo: string | null;
   /** Os que o MacleanFy tirou da lista. */
   off: LoginApp[];
 }
@@ -92,10 +96,28 @@ export function parseState(text: string | null): State {
   try {
     const state = JSON.parse(text ?? '') as Partial<State>;
     const off = Array.isArray(state.off) ? parseLoginItems(JSON.stringify(state.off)) : [];
-    return { granted: state.granted === true, off };
+    const grantedTo = typeof state.grantedTo === 'string' && state.grantedTo ? state.grantedTo : null;
+    return { grantedTo, off };
   } catch {
-    return { granted: false, off: [] };
+    return { grantedTo: null, off: [] };
   }
+}
+
+/** O time na saída do `codesign -dv`; nulo em assinatura ad-hoc ou sem assinatura. */
+export function parseTeamId(output: string): string | null {
+  const team = output.match(/^TeamIdentifier=(.+)$/m)?.[1]?.trim();
+  return team && team !== 'not set' ? team : null;
+}
+
+/** O time que assinou um app. O `codesign -dv` escreve na saída de erro. */
+export function signerOf(bundle: string): () => Promise<string | null> {
+  let signer: Promise<string | null> | undefined;
+  return () =>
+    (signer ??= new Promise((resolve) => {
+      execFile('/usr/bin/codesign', ['-dv', '--verbose=2', bundle], { timeout: 15000, env: { ...process.env, LC_ALL: 'C' } }, (_error, _stdout, stderr) =>
+        resolve(parseTeamId(String(stderr ?? '')))
+      );
+    }));
 }
 
 const exists = (path: string) => access(path).then(
@@ -108,15 +130,37 @@ const byName = (a: LoginAppDTO, b: LoginAppDTO) => a.name.localeCompare(b.name);
 export class LoginApps {
   /** O que a última lista mostrou: só esses a interface pode mudar. */
   private known = new Map<string, LoginAppDTO>();
+  /** Uma chamada por vez: duas lendo e gravando o arquivo juntas perderiam um app desligado. */
+  private queue: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly file: string,
+    private readonly signer: () => Promise<string | null>,
     private readonly osascript: ScriptRunner = runOsascript,
     private readonly isThere: (path: string) => Promise<boolean> = exists
   ) {}
 
   knows(path: string): boolean {
     return this.known.has(path);
+  }
+
+  /**
+   * Sem `ask`, só lê se a permissão já foi dada a este mesmo app: abrir a tela nunca
+   * faz o macOS perguntar.
+   */
+  list(ask = false): Promise<LoginAppsDTO> {
+    return this.serial(() => this.listNow(ask));
+  }
+
+  /** Tira o app da lista ou o põe de volta, e lê a lista de novo para conferir. */
+  set(path: string, on: boolean): Promise<{ done: boolean; list: LoginAppsDTO }> {
+    return this.serial(() => this.setNow(path, on));
+  }
+
+  private serial<T>(task: () => Promise<T>): Promise<T> {
+    const next = this.queue.then(task, task);
+    this.queue = next.catch(() => undefined);
+    return next;
   }
 
   private async load(): Promise<State> {
@@ -137,49 +181,49 @@ export class LoginApps {
     return result.ok ? parseLoginItems(result.stdout) : failureStatus(result.stderr);
   }
 
-  /** Sem `ask`, só lê se a permissão já foi dada antes: abrir a tela nunca faz o macOS perguntar. */
-  async list(ask = false): Promise<LoginAppsDTO> {
-    const state = await this.load();
-    if (!ask && !state.granted) {
+  /** `clicked`: a pessoa acabou de clicar, e o macOS pode perguntar pela permissão. */
+  private async listNow(clicked: boolean): Promise<LoginAppsDTO> {
+    const [state, signer] = await Promise.all([this.load(), this.signer()]);
+    if (!clicked && (!signer || state.grantedTo !== signer)) {
       this.known.clear();
       return { status: 'unasked', apps: [] };
     }
-    const read = await this.read(ask ? ASK_TIMEOUT_MS : TIMEOUT_MS);
+    const read = await this.read(clicked ? ASK_TIMEOUT_MS : TIMEOUT_MS);
     if (typeof read === 'string') {
       this.known.clear();
       // Permissão tirada depois nos Ajustes: a próxima abertura volta a esperar o pedido.
-      if (read === 'denied' && state.granted) await this.save({ ...state, granted: false });
+      if (read === 'denied' && state.grantedTo) await this.save({ ...state, grantedTo: null });
       return { status: read, apps: [] };
     }
     const on = new Set(read.map((app) => app.path));
-    // Quem voltou à lista pelos Ajustes, ou sumiu do disco, deixa de constar como desligado.
+    // Quem continua ou voltou à lista, ou sumiu do disco, deixa de constar como desligado.
     const off = (
       await Promise.all(state.off.map(async (app) => (!on.has(app.path) && (await this.isThere(app.path)) ? app : null)))
     ).filter((app): app is LoginApp => app !== null);
-    await this.save({ granted: true, off });
+    await this.save({ grantedTo: signer, off });
     const apps = [...read.map((app) => ({ ...app, off: false })), ...off.map((app) => ({ ...app, off: true }))].sort(byName);
     this.known = new Map(apps.map((app) => [app.path, app]));
     return { status: 'granted', apps };
   }
 
-  /** Tira o app da lista ou o põe de volta, e lê a lista de novo para conferir. */
-  async set(path: string, on: boolean): Promise<{ done: boolean; list: LoginAppsDTO }> {
+  private async setNow(path: string, on: boolean): Promise<{ done: boolean; list: LoginAppsDTO }> {
     const app = this.known.get(path);
-    if (!app) return { done: false, list: await this.list() };
-    if (app.off !== on) return { done: true, list: await this.list() };
+    if (!app) return { done: false, list: await this.listNow(false) };
 
-    const script = on ? ADD_SCRIPT : REMOVE_SCRIPT;
-    const args = [...script.flatMap((line) => ['-e', line]), app.path, ...(on ? [String(app.hidden)] : [])];
-    const result = await this.osascript(args, TIMEOUT_MS);
-    const after = result.ok ? await this.read(TIMEOUT_MS) : null;
-    const done = Array.isArray(after) && after.some((item) => item.path === app.path) === on;
-
-    if (done) {
-      const state = await this.load();
-      const off = state.off.filter((item) => item.path !== app.path);
-      if (!on) off.push({ name: app.name, path: app.path, hidden: app.hidden });
-      await this.save({ ...state, off });
+    if (app.off === on) {
+      if (!on) {
+        // Anotado antes de sair: se a conferência falhar, o app não se perde. A próxima
+        // lista desfaz a anotação se ele continuar lá.
+        const state = await this.load();
+        const off = state.off.filter((item) => item.path !== app.path);
+        await this.save({ ...state, off: [...off, { name: app.name, path: app.path, hidden: app.hidden }] });
+      }
+      const script = on ? ADD_SCRIPT : REMOVE_SCRIPT;
+      const args = [...script.flatMap((line) => ['-e', line]), app.path, ...(on ? [String(app.hidden)] : [])];
+      await this.osascript(args, TIMEOUT_MS);
     }
-    return { done, list: await this.list() };
+    const list = await this.listNow(true);
+    const now = list.apps.find((item) => item.path === app.path);
+    return { done: !!now && now.off === !on, list };
   }
 }

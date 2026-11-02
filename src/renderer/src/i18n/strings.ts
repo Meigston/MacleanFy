@@ -184,7 +184,7 @@ export const pt = {
   'perf.startup.less': 'Mostrar menos',
   'perf.startup.empty': 'Nenhum app de outro fabricante roda sozinho neste Mac.',
   'perf.startup.note':
-    'Só itens de outros fabricantes; os da Apple ficam de fora. Desligar vale a partir do próximo login e só na sua conta: o que está aberto continua aberto. Serviços do sistema pedem a senha de administrador e ficam com Itens de Início, nos Ajustes do Mac. Um item quebrado é sobra de app removido: os da sua conta saem pela Limpeza, em Launch agents órfãos; os outros, pelo Finder, com a senha de administrador.',
+    'Só itens de outros fabricantes; os da Apple ficam de fora. Desligar vale a partir do próximo login e só na sua conta: o que está aberto continua aberto. Se um app religar o próprio item ao abrir, desligue a opção nos ajustes dele. Serviços do sistema pedem a senha de administrador e ficam com Itens de Início, nos Ajustes do Mac. Um item quebrado é sobra de app removido: os da sua conta saem pela Limpeza, em Launch agents órfãos; os outros, pelo Finder, com a senha de administrador.',
   'perf.startup.scope.helper': 'Ajudante de login',
   'perf.startup.toggle': '{name}: abrir sozinho',
   'perf.startup.toggle.settings': 'Desligar nos Ajustes: serviço do sistema pede a senha',
@@ -205,7 +205,7 @@ export const pt = {
   'perf.login.hidden': 'Abre escondido',
   'perf.login.toggle': '{name}: abrir ao entrar na conta',
   'perf.login.note':
-    'Desligar tira o app da lista: ele não abre mais sozinho a partir do próximo login, continua aberto agora e volta com um clique. Um app que se cadastra de outro jeito pode não aparecer aqui; a lista completa está em Itens de Início.',
+    'Desligar tira o app da lista: ele não abre mais sozinho a partir do próximo login, continua aberto agora e volta com um clique. Alguns apps se põem de volta na lista ao abrir; nesses, desligue também a opção nos ajustes do próprio app. Um app que se cadastra de outro jeito pode não aparecer aqui; a lista completa está em Itens de Início.',
 
   'disk.subtitle': 'Onde está o espaço da sua pasta pessoal. Clique numa pasta para entrar nela.',
   'disk.intro.title': 'Medir a pasta pessoal',
@@ -675,7 +675,7 @@ export const en: Record<StringKey, string> = {
   'perf.startup.less': 'Show less',
   'perf.startup.empty': 'No third-party app runs on its own on this Mac.',
   'perf.startup.note':
-    'Third-party items only; Apple’s are left out. Turning one off takes effect at your next login and only in your account: what is open stays open. System services need the administrator password and are left to Login Items in your Mac’s settings. A broken item is left over from a removed app: the ones in your account go through Cleaning, under Orphaned Launch Agents; the others through Finder, with the administrator password.',
+    'Third-party items only; Apple’s are left out. Turning one off takes effect at your next login and only in your account: what is open stays open. If an app turns its own item back on when it opens, turn the option off in its settings. System services need the administrator password and are left to Login Items in your Mac’s settings. A broken item is left over from a removed app: the ones in your account go through Cleaning, under Orphaned Launch Agents; the others through Finder, with the administrator password.',
   'perf.startup.scope.helper': 'Login helper',
   'perf.startup.toggle': '{name}: open on its own',
   'perf.startup.toggle.settings': 'Turn off in Settings: system services need your password',
@@ -696,7 +696,7 @@ export const en: Record<StringKey, string> = {
   'perf.login.hidden': 'Opens hidden',
   'perf.login.toggle': '{name}: open at login',
   'perf.login.note':
-    'Turning an app off removes it from the list: it no longer opens on its own from your next login, stays open for now and comes back with one click. An app that signs up some other way may be missing here; the full list is in Login Items.',
+    'Turning an app off removes it from the list: it no longer opens on its own from your next login, stays open for now and comes back with one click. Some apps put themselves back on the list when they open; for those, also turn off the option in the app’s own settings. An app that signs up some other way may be missing here; the full list is in Login Items.',
 
   'disk.subtitle': 'Where the space in your home folder goes. Click a folder to step into it.',
   'disk.intro.title': 'Measure your home folder',

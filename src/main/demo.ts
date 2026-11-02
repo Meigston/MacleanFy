@@ -586,6 +586,7 @@ const STARTUP: StartupItemDTO[] = [
       ? `/Applications/${item.app}.app/Contents/Library/LoginItems/${item.app} Helper.app`
       : `${scope === 'user' ? `${HOME}/Library/LaunchAgents` : scope === 'agent' ? '/Library/LaunchAgents' : '/Library/LaunchDaemons'}/${item.label}.plist`;
   return {
+    id: scope === 'helper' ? `helper:${item.label}` : path,
     label: item.label,
     path,
     scope,
@@ -769,9 +770,9 @@ export function registerDemoIpc(): void {
     await sleep(300);
     return startup.map((item) => ({ ...item }));
   });
-  handle(CHANNELS.startupSetEnabled, async (_sender, path, on) => {
+  handle(CHANNELS.startupSetEnabled, async (_sender, id, on) => {
     await sleep(250);
-    const item = startup.find((entry) => entry.path === path);
+    const item = startup.find((entry) => entry.id === id);
     if (!item?.toggleable || typeof on !== 'boolean') return false;
     item.disabled = !on;
     return true;

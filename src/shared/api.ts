@@ -427,6 +427,8 @@ export type StartupWhen = 'load' | 'schedule' | 'demand' | 'unknown';
 
 /** Algo que o launchd abre sozinho. */
 export interface StartupItemDTO {
+  /** O que a interface devolve para ligar e desligar: o plist, ou o rótulo do ajudante. */
+  id: string;
   label: string;
   /** O plist que cadastra o item, ou o app do ajudante; é ele que "Mostrar no Finder" aponta. */
   path: string;
@@ -610,7 +612,7 @@ export interface MacleanFyApi {
      * Só itens da última lista que o app sabe ligar e desligar. Vale a partir do próximo login:
      * o que está aberto continua aberto. Verdadeiro se o macOS confirmou a mudança.
      */
-    setEnabled(path: string, on: boolean): Promise<boolean>;
+    setEnabled(id: string, on: boolean): Promise<boolean>;
     /**
      * Os apps de "Abrir ao iniciar sessão", lidos pelo System Events. Só com `ask` o macOS
      * pergunta pela permissão; sem ele, a lista só vem se a permissão já foi dada antes.

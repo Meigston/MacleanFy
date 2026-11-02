@@ -38,12 +38,12 @@ export function StartupItems() {
   }, []);
 
   const toggle = async (item: StartupItemDTO, on: boolean) => {
-    setPending(item.path);
+    setPending(item.id);
     setFailed(null);
-    const done = await window.macleanfy.startup.setEnabled(item.path, on).catch(() => false);
+    const done = await window.macleanfy.startup.setEnabled(item.id, on).catch(() => false);
     setPending(null);
     if (done) {
-      setItems((list) => list?.map((entry) => (entry.path === item.path ? { ...entry, disabled: !on } : entry)) ?? list);
+      setItems((list) => list?.map((entry) => (entry.id === item.id ? { ...entry, disabled: !on } : entry)) ?? list);
     } else {
       setFailed(item.app ?? item.label);
     }
@@ -86,7 +86,7 @@ export function StartupItems() {
       ) : (
         <ul className="perf__table">
           {shown?.map((item) => (
-            <li key={item.path} className="perf__row startup__row">
+            <li key={item.id} className="perf__row startup__row">
               <span className="startup__name">
                 <strong>{item.app ?? item.label}</strong>
                 <span title={item.program ? shortPath(item.program) : undefined}>

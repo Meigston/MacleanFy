@@ -10,7 +10,7 @@ import {
 } from 'electron';
 import electronUpdater from 'electron-updater';
 import { lstat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { CATEGORIES, type CategoryId } from '../core/types';
 import { listInstalledApps, uninstallApps, type AppInfo } from '../core/apps';
@@ -33,7 +33,7 @@ import { DiskMap } from './disk';
 import { Engine } from './engine';
 import { HistoryStore } from './history';
 import { PerformanceMonitor } from './perf/monitor';
-import { LoginApps } from './login-apps';
+import { LoginApps, signerOf } from './login-apps';
 import { listStartupItems, readStartupPlists, setStartupEnabled } from './startup';
 import { removalScript, systemFilesOf, type SystemFile } from './system-files';
 import { getMaintenanceInfo, getSystemInfo, runAsAdmin, runMaintenance, setNoDsStore } from './system';
@@ -110,7 +110,10 @@ export function registerIpc(): void {
   // Itens de inicialização da última listagem: só eles podem ser mostrados no Finder, ligados e desligados.
   let knownStartup = new Map<string, StartupItemDTO>();
   // A permissão do System Events é do app instalado; rodando do código-fonte, quem pede é o Electron.
-  const loginApps = new LoginApps(join(app.getPath('userData'), app.isPackaged ? 'login-apps.json' : 'login-apps-dev.json'));
+  const loginApps = new LoginApps(
+    join(app.getPath('userData'), app.isPackaged ? 'login-apps.json' : 'login-apps-dev.json'),
+    signerOf(resolve(app.getPath('exe'), '../../..'))
+  );
   // O mapa do espaço da conta, e o que a última pasta listada mostrou.
   const disk = new DiskMap();
   let knownDisk = new Map<string, number>();
@@ -316,14 +319,14 @@ export function registerIpc(): void {
 
   handle(CHANNELS.startupList, async () => {
     const items = await listStartupItems();
-    knownStartup = new Map(items.map((item) => [item.path, item]));
+    knownStartup = new Map(items.map((item) => [item.id, item]));
     return items;
   });
-  handle(CHANNELS.startupSetEnabled, async (_sender, path: unknown, on: unknown) => {
-    const item = typeof path === 'string' ? knownStartup.get(path) : undefined;
+  handle(CHANNELS.startupSetEnabled, async (_sender, id: unknown, on: unknown) => {
+    const item = typeof id === 'string' ? knownStartup.get(id) : undefined;
     if (!item?.toggleable || typeof on !== 'boolean') return false;
     const done = await setStartupEnabled(item.label, on);
-    if (done) knownStartup.set(item.path, { ...item, disabled: !on });
+    if (done) knownStartup.set(item.id, { ...item, disabled: !on });
     return done;
   });
   handle(CHANNELS.loginApps, (_sender, ask: unknown) => loginApps.list(ask === true));
@@ -355,7 +358,7 @@ export function registerIpc(): void {
     if (typeof path !== 'string') return;
     const isRelated = [...knownApps.values()].some((info) => info.related.some((r) => r.path === path));
     const isSystem = [...knownSystem.values()].some((files) => files.some((file) => file.path === path));
-    if (engine.knows(path) || knownApps.has(path) || isRelated || isSystem || knownStartup.has(path) || loginApps.knows(path) || knownDisk.has(path) || ai.knows(path)) {
+    if (engine.knows(path) || knownApps.has(path) || isRelated || isSystem || [...knownStartup.values()].some((item) => item.path === path) || loginApps.knows(path) || knownDisk.has(path) || ai.knows(path)) {
       shell.showItemInFolder(path);
     }
   });

@@ -34,6 +34,7 @@ function reading(partial: Partial<PlistReading> = {}): PlistReading {
 
 function item(partial: Partial<StartupItemDTO>): StartupItemDTO {
   return {
+    id: '/Library/LaunchAgents/com.vendor.agent.plist',
     label: 'com.vendor.agent',
     path: '/Library/LaunchAgents/com.vendor.agent.plist',
     scope: 'agent',
@@ -203,6 +204,7 @@ describe('startup items', () => {
       context
     );
     expect(described).toEqual({
+      id: '/Users/ana/Library/LaunchAgents/com.lwouis.alt-tab-macos.plist',
       label: 'com.lwouis.alt-tab-macos',
       path: '/Users/ana/Library/LaunchAgents/com.lwouis.alt-tab-macos.plist',
       scope: 'user',
@@ -311,19 +313,38 @@ describe('startup items', () => {
           '}',
         ].join('\n')
       );
-      expect(helper).toEqual({ submittedBy: 'smd', plist: null, parent: 'com.spotify.client', running: false });
+      expect(helper).toEqual({ submittedBy: 'smd', plist: null, parent: 'com.spotify.client', running: false, runAtLoad: false });
 
       const agent = parseServicePrint(
-        ['gui/501/com.logi.cp-dev-mgr = {', '\tpath = /Library/LaunchAgents/com.logi.optionsplus.plist', '\tstate = running', '}'].join('\n')
+        [
+          'gui/501/com.logi.cp-dev-mgr = {',
+          '\tpath = /Library/LaunchAgents/com.logi.optionsplus.plist',
+          '\tstate = running',
+          '\tproperties = partial import | keepalive | runatload | inferred program',
+          '}',
+        ].join('\n')
       );
-      expect(agent).toEqual({ submittedBy: null, plist: '/Library/LaunchAgents/com.logi.optionsplus.plist', parent: null, running: true });
+      expect(agent).toEqual({
+        submittedBy: null,
+        plist: '/Library/LaunchAgents/com.logi.optionsplus.plist',
+        parent: null,
+        running: true,
+        runAtLoad: true,
+      });
 
       // Fora do launchd, o print falha e não sobra nada.
       expect(parseServicePrint('')).toBeNull();
     });
 
     it('tells a login helper from anything else launchd runs', () => {
-      const info = (partial: Partial<ServiceInfo>): ServiceInfo => ({ submittedBy: null, plist: null, parent: null, running: false, ...partial });
+      const info = (partial: Partial<ServiceInfo>): ServiceInfo => ({
+        submittedBy: null,
+        plist: null,
+        parent: null,
+        running: false,
+        runAtLoad: false,
+        ...partial,
+      });
       expect(isLoginHelper(info({ submittedBy: 'smd' }))).toBe(true);
       expect(isLoginHelper(info({ plist: '/Applications/Vendor.app/Contents/Library/LaunchAgents/com.vendor.agent.plist' }))).toBe(true);
       // O ShipIt é o atualizador do próprio app, cadastrado por ele enquanto roda.
@@ -353,10 +374,11 @@ describe('startup items', () => {
 
     const SPOTIFY_HELPER = '/Applications/Spotify.app/Contents/Library/LoginItems/StartUpHelper.app';
     const APPS = { 'com.spotify.client.startuphelper': SPOTIFY_HELPER, 'com.spotify.client': '/Applications/Spotify.app' };
-    const SMD: ServiceInfo = { submittedBy: 'smd', plist: null, parent: 'com.spotify.client', running: false };
+    const SMD: ServiceInfo = { submittedBy: 'smd', plist: null, parent: 'com.spotify.client', running: false, runAtLoad: false };
 
     it('describes a helper registered by its app', () => {
       expect(describeHelper('com.spotify.client.startuphelper', SMD, false, APPS)).toEqual({
+        id: 'helper:com.spotify.client.startuphelper',
         label: 'com.spotify.client.startuphelper',
         path: SPOTIFY_HELPER,
         scope: 'helper',
@@ -374,7 +396,30 @@ describe('startup items', () => {
       expect(describeHelper('com.spotify.client.startuphelper', null, true, APPS)).toMatchObject({ disabled: true, toggleable: true });
       // Cadastro antigo de um app que não tem mais o ajudante: não abre nada.
       expect(describeHelper('com.openai.chat-helper', null, true, APPS)).toBeNull();
-      expect(describeHelper('com.openai.chat-helper', null, false, APPS)).toBeNull();
+      // Ligado na lista e fora do launchd: não se sabe se abre, e não aparece como se abrisse.
+      expect(describeHelper('com.spotify.client.startuphelper', null, false, APPS)).toBeNull();
+    });
+
+    it('lets an agent inside an app open on its own only when its plist says so', () => {
+      const plist = '/Applications/Vendor.app/Contents/Library/LaunchAgents/com.vendor.xpc.plist';
+      const service: ServiceInfo = { submittedBy: null, plist, parent: null, running: false, runAtLoad: false };
+      expect(describeHelper('com.vendor.xpc', service, undefined, {})).toMatchObject({
+        path: plist,
+        app: 'Vendor',
+        when: 'demand',
+        toggleable: false,
+      });
+      expect(describeHelper('com.vendor.xpc', { ...service, runAtLoad: true }, undefined, {})).toMatchObject({
+        when: 'load',
+        toggleable: true,
+      });
+    });
+
+    it('keeps two helpers of the same app apart', () => {
+      const one = describeHelper('com.vendor.one', { ...SMD, parent: 'com.spotify.client' }, undefined, APPS);
+      const two = describeHelper('com.vendor.two', { ...SMD, parent: 'com.spotify.client' }, undefined, APPS);
+      expect(one?.path).toBe(two?.path);
+      expect(one?.id).not.toBe(two?.id);
     });
 
     it('falls back to the parent app when the helper bundle is not found', () => {
