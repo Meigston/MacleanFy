@@ -11,6 +11,36 @@ export interface ReleaseNote {
  * do GitHub; aqui entra só o que a pessoa nota ao abrir o app.
  */
 export const RELEASE_NOTES: Record<string, Record<Locale, ReleaseNote[]>> = {
+  '0.1.5': {
+    'pt-BR': [
+      {
+        title: 'Apps ao entrar na conta',
+        text: 'Em Desempenho, a lista “Abrir ao iniciar sessão” dos Ajustes aparece com um interruptor para cada app. Ao clicar em “Mostrar apps”, o macOS pergunta uma vez se o MacleanFy pode controlar os Eventos do Sistema; sem a sua permissão, nada é lido.',
+      },
+      {
+        title: 'Desligar o que abre sozinho',
+        text: 'Os itens em segundo plano agora incluem os ajudantes de login que os apps cadastram, e os que abrem sozinhos ganham um interruptor. Desligar vale a partir do próximo login, só na sua conta e sem senha: o que está aberto continua aberto.',
+      },
+      {
+        title: 'Serviços do sistema',
+        text: 'Os que pedem a senha de administrador ganham um botão que abre Itens de Início, nos Ajustes do Mac, onde dá para desligá-los.',
+      },
+    ],
+    en: [
+      {
+        title: 'Apps at login',
+        text: 'Under Performance, the “Open at Login” list from Settings shows up with a switch for each app. When you click “Show apps”, macOS asks once whether MacleanFy may control System Events; without your permission, nothing is read.',
+      },
+      {
+        title: 'Turn off what opens on its own',
+        text: 'Background items now include the login helpers that apps register, and the ones that open on their own get a switch. Turning one off takes effect at your next login, only in your account and without a password: what is open stays open.',
+      },
+      {
+        title: 'System services',
+        text: 'The ones that need the administrator password get a button that opens Login Items in your Mac’s settings, where you can turn them off.',
+      },
+    ],
+  },
   '0.1.4': {
     'pt-BR': [
       {
