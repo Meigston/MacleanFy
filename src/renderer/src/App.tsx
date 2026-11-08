@@ -45,7 +45,8 @@ export function App() {
   const locale = useStore((state) => state.locale);
   // A captura de tela (ferramenta de desenvolvimento) espera este sinal baixar.
   const busy = useStore(
-    (state) => state.system === null || state.scanning || state.appsLoading || state.diskBusy || state.aiLoading
+    (state) =>
+      state.system === null || state.scanning || state.appsLoading || state.diskBusy || state.diskWholeBusy || state.aiLoading
   );
   const whatsNew = useStore((state) => state.whatsNew);
   // O aviso de atualização espera a limpeza e as novidades: um diálogo não cobre o outro.

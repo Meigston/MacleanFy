@@ -88,3 +88,13 @@ describe('removeAiSelected', () => {
     expect(useStore.getState().aiSelection.size).toBe(0);
   });
 });
+
+describe('whole disk from the overview card', () => {
+  it('goes to the disk screen once, asking it to measure', () => {
+    useStore.setState({ route: 'overview', diskIntent: null });
+    useStore.getState().openWholeDisk();
+    expect(useStore.getState().route).toBe('disk');
+    expect(useStore.getState().consumeDiskIntent()).toBe('whole');
+    expect(useStore.getState().consumeDiskIntent()).toBeNull();
+  });
+});

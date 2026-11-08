@@ -1,4 +1,4 @@
-import { Info, Lock, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { ChevronRight, Info, Lock, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { CATEGORIES, type CategoryId, type SafetyLevel } from '../../../core/types';
 import { useEffect, useState } from 'react';
 import type { HistoryEntry, PerformanceFinding } from '../../../shared/api';
@@ -79,6 +79,7 @@ export function Overview() {
   const scannedAt = useStore((state) => state.scannedAt);
   const scan = useStore((state) => state.scan);
   const navigate = useStore((state) => state.navigate);
+  const openWholeDisk = useStore((state) => state.openWholeDisk);
 
   // Uma leitura de desempenho por visita: o que pesa agora entra nas recomendações.
   const [findings, setFindings] = useState<PerformanceFinding[]>([]);
@@ -200,6 +201,15 @@ export function Overview() {
 
       <div className="overview">
         <article className={`card hero hero--${health}`}>
+          {/* O cartão inteiro leva ao disco inteiro; a dica do (i) fica por cima e continua só explicando. */}
+          <button
+            type="button"
+            className="hero__open"
+            aria-label={t('overview.disk.open', { name: disk?.volumeName ?? '' })}
+            disabled={!disk}
+            onClick={openWholeDisk}
+            data-action="open-whole-disk"
+          />
           <span className="hero__ring" aria-hidden="true" />
           <Laptop />
 
@@ -238,6 +248,12 @@ export function Overview() {
             >
               <div className="meter__fill" style={{ width: `${disk ? (1 - freeRatio) * 100 : 0}%` }} />
             </div>
+            {disk && (
+              <span className="hero__more" aria-hidden="true">
+                {t('overview.disk.details')}
+                <ChevronRight size={13} />
+              </span>
+            )}
           </div>
         </article>
 

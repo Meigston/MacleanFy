@@ -8,6 +8,7 @@ export { LOCALES, type Locale } from './locale';
 
 type Vars = Record<string, string | number>;
 type PluralKey =
+  | 'account'
   | 'item'
   | 'category'
   | 'app'

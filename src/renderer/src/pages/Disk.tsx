@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, ChartPie, ChevronRight, File, Folder, FolderOpen, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowUp, ChevronRight, File, Folder, FolderOpen, Trash2 } from 'lucide-react';
 import { isInPhotosLibrary, type DiskEntryDTO, type DiskFolderDTO, type DiskProgress } from '../../../shared/api';
 import { Button, Modal, Spinner, shortPath } from '../components/ui';
+import { WholeDisk } from '../components/WholeDisk';
 import { useT } from '../i18n';
 import { useStore } from '../state/store';
 
@@ -13,7 +14,8 @@ const MEASURING_DELAY_MS = 150;
 /** A última pasta aberta, para voltar a ela ao sair e entrar de novo na tela. */
 let remembered: string | undefined;
 
-type Phase = 'checking' | 'intro' | 'measuring' | 'ready' | 'error';
+/** `waiting`: a pasta pessoal ainda não foi medida; quem mede é o cartão do disco inteiro. */
+type Phase = 'checking' | 'waiting' | 'measuring' | 'ready' | 'error';
 
 export function Disk() {
   const tr = useT();
@@ -25,7 +27,13 @@ export function Disk() {
   const [progress, setProgress] = useState<DiskProgress | null>(null);
   const [trashing, setTrashing] = useState<DiskEntryDTO | null>(null);
   const [trashBusy, setTrashBusy] = useState(false);
+  // A pasta pessoal em outro disco não entra na medida do cartão: o explorador mede sozinho.
+  const [homeElsewhere, setHomeElsewhere] = useState(false);
+  const [wholeReload, setWholeReload] = useState(0);
   const request = useRef(0);
+  const folderCard = useRef<HTMLElement>(null);
+  // Lido na montagem e apagado depois: o pedido do cartão da Visão geral vale uma vez.
+  const [intent] = useState(() => useStore.getState().diskIntent);
 
   useEffect(() => window.macleanfy.disk.onProgress(setProgress), []);
 
@@ -47,7 +55,11 @@ export function Disk() {
         remembered = next.path;
         setFolder(next);
         setPhase('ready');
-      } else setPhase('intro');
+      } else if (options.cachedOnly && path !== undefined) {
+        // A pasta lembrada não está mais no mapa (uma medida nova não desce tão fundo): volta à pasta pessoal.
+        remembered = undefined;
+        return open(undefined, options);
+      } else setPhase('waiting');
     } catch {
       if (request.current === id) setPhase(folder ? 'ready' : 'error');
     } finally {
@@ -57,6 +69,7 @@ export function Disk() {
   };
 
   useEffect(() => {
+    useStore.getState().consumeDiskIntent();
     void open(remembered, { cachedOnly: true });
     return () => setDiskBusy(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -66,98 +79,65 @@ export function Disk() {
     if (!trashing || !folder) return;
     setTrashBusy(true);
     try {
-      if (await window.macleanfy.disk.trash(trashing.path)) await open(folder.path);
+      if (await window.macleanfy.disk.trash(trashing.path)) {
+        // O que foi para a Lixeira muda as fatias da pasta pessoal no cartão de cima.
+        setWholeReload((current) => current + 1);
+        await open(folder.path);
+      }
     } finally {
       setTrashBusy(false);
       setTrashing(null);
     }
   };
 
-  const header = (
-    <header className="page__header">
-      <div>
-        <h1 className="page__title">{t('nav.disk')}</h1>
-        <p className="page__subtitle">{t('disk.subtitle')}</p>
-      </div>
-      {phase === 'ready' && folder && (
-        <div className="page__actions">
-          <span className="disk__measured">{t('disk.measured', { ago: tr.ago(folder.scannedAt) })}</span>
-          <Button icon={<RefreshCw size={15} />} onClick={() => void open(folder.path, { refresh: true })}>
-            {t('disk.remeasure')}
-          </Button>
-        </div>
-      )}
-    </header>
-  );
+  const showFolders = () => folderCard.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const explore = async (path: string) => {
+    await open(path);
+    showFolders();
+  };
 
-  if (phase !== 'ready' || !folder) {
-    return (
-      <section className="page">
-        {header}
-        <div className="stage">
-          {phase === 'measuring' ? (
-            <>
-              <Spinner size={34} />
-              <p className="stage__text">{t('disk.measuring', { size: tr.size(progress?.bytes ?? 0) })}</p>
-              <p className="disk__current">{progress ? shortPath(progress.path) : ''}</p>
-            </>
-          ) : phase === 'checking' ? (
-            <Spinner size={28} />
-          ) : (
-            <div className="disk__intro">
-              <span className="task__icon">
-                <ChartPie size={22} strokeWidth={1.7} />
-              </span>
-              <h2 className="task__title">{t('disk.intro.title')}</h2>
-              <p className="task__text">{phase === 'error' ? t('disk.error') : t('disk.intro.text')}</p>
-              <Button variant="primary" onClick={() => void open()}>
-                {t('disk.measure')}
-              </Button>
-            </div>
-          )}
-        </div>
-      </section>
-    );
-  }
-
-  const used = folder.disk.total - folder.disk.free;
-  const other = Math.max(0, used - folder.home);
-  const share = (bytes: number) => (folder.disk.total > 0 ? (bytes / folder.disk.total) * 100 : 0);
-  const shown = folder.entries.slice(0, SHOWN);
-  const rest = folder.entries.slice(SHOWN);
+  const shown = folder?.entries.slice(0, SHOWN) ?? [];
+  const rest = folder?.entries.slice(SHOWN) ?? [];
   const restSize = rest.reduce((sum, entry) => sum + entry.size, 0);
   // As pastas do primeiro nível da conta e da Biblioteca seguram o sistema: delas só se mostra.
-  const parent = folder.crumbs.length > 1 ? folder.crumbs[folder.crumbs.length - 2].path : null;
-  const trashable = folder.crumbs.length > 1 && !(folder.crumbs.length === 2 && folder.crumbs[1].name === 'Library');
+  const parent = folder && folder.crumbs.length > 1 ? folder.crumbs[folder.crumbs.length - 2].path : null;
+  const trashable = !!folder && folder.crumbs.length > 1 && !(folder.crumbs.length === 2 && folder.crumbs[1].name === 'Library');
   const percent = new Intl.NumberFormat(tr.locale, { style: 'percent', maximumFractionDigits: 1 });
 
   return (
     <section className="page">
-      {header}
+      <header className="page__header">
+        <div>
+          <h1 className="page__title">{t('nav.disk')}</h1>
+          <p className="page__subtitle">{t('disk.subtitle')}</p>
+        </div>
+      </header>
+
       <div className="page__body disk">
-        <article className="card disk__volume">
-          <div className="disk__volume-head">
-            <span className="card__label">{t('disk.volume', { used: tr.size(used), total: tr.size(folder.disk.total) })}</span>
-          </div>
-          <div className="disk__stack" role="img" aria-label={t('disk.volume', { used: tr.size(used), total: tr.size(folder.disk.total) })}>
-            <span className="disk__segment disk__segment--home" style={{ width: `${share(folder.home)}%` }} />
-            <span className="disk__segment disk__segment--other" style={{ width: `${share(other)}%` }} />
-          </div>
-          <div className="disk__legend">
-            <span>
-              <i className="disk__swatch disk__swatch--home" />
-              {t('disk.legend.home')} <strong>{tr.size(folder.home)}</strong>
-            </span>
-            <span>
-              <i className="disk__swatch disk__swatch--other" />
-              {t('disk.legend.other')} <strong>{tr.size(other)}</strong>
-            </span>
-            <span>
-              <i className="disk__swatch disk__swatch--free" />
-              {t('disk.legend.free')} <strong>{tr.size(folder.disk.free)}</strong>
-            </span>
-          </div>
-        </article>
+        <WholeDisk
+          autoMeasure={intent === 'whole' && fullDiskAccess}
+          onExplore={(path) => void explore(path)}
+          onShowFolders={showFolders}
+          onHomeMeasured={() => void open(remembered, { cachedOnly: true })}
+          onRead={(dto) => setHomeElsewhere(dto.homeElsewhere)}
+          reloadKey={wholeReload}
+        />
+
+        {homeElsewhere && !folder && phase === 'waiting' && (
+          <article className="card disk__elsewhere">
+            <p className="card__empty">{t('disk.elsewhere')}</p>
+            <Button variant="primary" onClick={() => void open()}>
+              {t('disk.measureHome')}
+            </Button>
+          </article>
+        )}
+        {homeElsewhere && !folder && phase === 'measuring' && (
+          <article className="card disk__folder-measuring">
+            <Spinner size={22} />
+            <p className="stage__text">{t('disk.measuring', { size: tr.size(progress?.bytes ?? 0) })}</p>
+            <p className="disk__current">{progress ? shortPath(progress.path) : ''}</p>
+          </article>
+        )}
 
         {!fullDiskAccess && (
           <div className="notice notice--warning disk__notice">
@@ -168,103 +148,113 @@ export function Disk() {
           </div>
         )}
 
-        <article className="card disk__folder">
-          <nav className="disk__crumbs" aria-label={t('nav.disk')}>
-            <button
-              type="button"
-              className="item__reveal disk__up"
-              aria-label={t('disk.up')}
-              data-tip={t('disk.up')}
-              disabled={!parent}
-              onClick={() => parent && void open(parent)}
-            >
-              <ArrowUp size={14} />
-            </button>
-            {folder.crumbs.map((crumb, index) => (
-              <span key={crumb.path} className="disk__crumb">
-                {index > 0 && <ChevronRight size={13} />}
-                <button
-                  type="button"
-                  className={index === folder.crumbs.length - 1 ? 'disk__crumb--here' : undefined}
-                  onClick={() => index < folder.crumbs.length - 1 && void open(crumb.path)}
-                >
-                  {index === 0 ? t('disk.home') : crumb.name}
-                </button>
-              </span>
-            ))}
-            <span className="disk__total">{tr.size(folder.size)}</span>
-          </nav>
+        {phase === 'error' && !folder && <div className="notice notice--warning disk__notice">{t('disk.error')}</div>}
 
-          {folder.entries.length === 0 ? (
-            <p className="card__empty">{t('disk.empty')}</p>
-          ) : (
-            <ul className="disk__list">
-              {shown.map((entry) => {
-                const fraction = folder.size > 0 ? entry.size / folder.size : 0;
-                return (
-                  <li
-                    key={entry.path}
-                    className={`disk__row${entry.directory ? ' disk__row--folder' : ''}`}
-                    role={entry.directory ? 'button' : undefined}
-                    tabIndex={entry.directory ? 0 : undefined}
-                    onClick={() => entry.directory && void open(entry.path)}
-                    onKeyDown={(event) => {
-                      if (entry.directory && event.key === 'Enter' && event.target === event.currentTarget) {
-                        void open(entry.path);
-                      }
-                    }}
+        {folder && (phase === 'ready' || phase === 'measuring') && (
+          <article className="card disk__folder" ref={folderCard}>
+            <nav className="disk__crumbs" aria-label={t('nav.disk')}>
+              <button
+                type="button"
+                className="item__reveal disk__up"
+                aria-label={t('disk.up')}
+                data-tip={t('disk.up')}
+                disabled={!parent || phase === 'measuring'}
+                onClick={() => parent && void open(parent)}
+              >
+                <ArrowUp size={14} />
+              </button>
+              {folder.crumbs.map((crumb, index) => (
+                <span key={crumb.path} className="disk__crumb">
+                  {index > 0 && <ChevronRight size={13} />}
+                  <button
+                    type="button"
+                    className={index === folder.crumbs.length - 1 ? 'disk__crumb--here' : undefined}
+                    onClick={() => index < folder.crumbs.length - 1 && void open(crumb.path)}
                   >
-                    <span className="disk__icon">{entry.directory ? <Folder size={16} /> : <File size={16} />}</span>
-                    <span className="disk__name">{entry.name}</span>
-                    <span className="disk__bar" aria-hidden="true">
-                      <span style={{ width: `${Math.max(fraction * 100, entry.size > 0 ? 0.6 : 0)}%` }} />
-                    </span>
-                    <span className="disk__size">{tr.size(entry.size)}</span>
-                    <span className="disk__share">{percent.format(fraction)}</span>
-                    <span className="disk__actions">
-                      <button
-                        type="button"
-                        className="item__reveal"
-                        aria-label={t('action.reveal')}
-                        data-tip={t('action.reveal')}
-                        data-tip-pos="left"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void window.macleanfy.system.reveal(entry.path);
-                        }}
-                      >
-                        <FolderOpen size={14} />
-                      </button>
-                      {trashable && !isInPhotosLibrary(entry.path) && (
+                    {index === 0 ? t('disk.home') : crumb.name}
+                  </button>
+                </span>
+              ))}
+              <span className="disk__total">{tr.size(folder.size)}</span>
+            </nav>
+
+            {phase === 'measuring' ? (
+              <div className="disk__folder-measuring">
+                <Spinner size={22} />
+                <p className="stage__text">{t('disk.measuring', { size: tr.size(progress?.bytes ?? 0) })}</p>
+                <p className="disk__current">{progress ? shortPath(progress.path) : ''}</p>
+              </div>
+            ) : folder.entries.length === 0 ? (
+              <p className="card__empty">{t('disk.empty')}</p>
+            ) : (
+              <ul className="disk__list">
+                {shown.map((entry) => {
+                  const fraction = folder.size > 0 ? entry.size / folder.size : 0;
+                  return (
+                    <li
+                      key={entry.path}
+                      className={`disk__row${entry.directory ? ' disk__row--folder' : ''}`}
+                      role={entry.directory ? 'button' : undefined}
+                      tabIndex={entry.directory ? 0 : undefined}
+                      onClick={() => entry.directory && void open(entry.path)}
+                      onKeyDown={(event) => {
+                        if (entry.directory && event.key === 'Enter' && event.target === event.currentTarget) {
+                          void open(entry.path);
+                        }
+                      }}
+                    >
+                      <span className="disk__icon">{entry.directory ? <Folder size={16} /> : <File size={16} />}</span>
+                      <span className="disk__name">{entry.name}</span>
+                      <span className="disk__bar" aria-hidden="true">
+                        <span style={{ width: `${Math.max(fraction * 100, entry.size > 0 ? 0.6 : 0)}%` }} />
+                      </span>
+                      <span className="disk__size">{tr.size(entry.size)}</span>
+                      <span className="disk__share">{percent.format(fraction)}</span>
+                      <span className="disk__actions">
                         <button
                           type="button"
-                          className="item__reveal disk__trash"
-                          aria-label={t('disk.trash')}
-                          data-tip={t('disk.trash')}
+                          className="item__reveal"
+                          aria-label={t('action.reveal')}
+                          data-tip={t('action.reveal')}
                           data-tip-pos="left"
                           onClick={(event) => {
                             event.stopPropagation();
-                            setTrashing(entry);
+                            void window.macleanfy.system.reveal(entry.path);
                           }}
                         >
-                          <Trash2 size={14} />
+                          <FolderOpen size={14} />
                         </button>
-                      )}
+                        {trashable && !isInPhotosLibrary(entry.path) && (
+                          <button
+                            type="button"
+                            className="item__reveal disk__trash"
+                            aria-label={t('disk.trash')}
+                            data-tip={t('disk.trash')}
+                            data-tip-pos="left"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setTrashing(entry);
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
+                {rest.length > 0 && (
+                  <li className="disk__row disk__row--rest">
+                    <span className="disk__icon" />
+                    <span className="disk__name">
+                      {t('disk.smaller', { count: tr.plural('item', rest.length), size: tr.size(restSize) })}
                     </span>
                   </li>
-                );
-              })}
-              {rest.length > 0 && (
-                <li className="disk__row disk__row--rest">
-                  <span className="disk__icon" />
-                  <span className="disk__name">
-                    {t('disk.smaller', { count: tr.plural('item', rest.length), size: tr.size(restSize) })}
-                  </span>
-                </li>
-              )}
-            </ul>
-          )}
-        </article>
+                )}
+              </ul>
+            )}
+          </article>
+        )}
       </div>
 
       {trashing && (

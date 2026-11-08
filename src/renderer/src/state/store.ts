@@ -82,6 +82,10 @@ interface State {
 
   /** Medindo o espaço da conta; a captura de tela espera acabar. */
   diskBusy: boolean;
+  /** Lendo ou medindo o disco inteiro; separado do explorador para um não desligar o outro. */
+  diskWholeBusy: boolean;
+  /** Quem abriu a tela de disco pelo cartão da Visão geral quer o disco inteiro: a tela começa a medir sozinha. */
+  diskIntent: 'whole' | null;
 
   /** O que as ferramentas de IA deixaram no disco, na última análise. */
   ai: AiScanDTO | null;
@@ -111,6 +115,11 @@ interface State {
   setUpdatePrompt(open: boolean): void;
   closeWhatsNew(): void;
   setDiskBusy(busy: boolean): void;
+  setDiskWholeBusy(busy: boolean): void;
+  /** Vai para o disco inteiro, a partir do cartão da Visão geral. */
+  openWholeDisk(): void;
+  /** O pedido do cartão vale uma vez: quem o lê o apaga. */
+  consumeDiskIntent(): 'whole' | null;
 
   loadAi(): Promise<void>;
   toggleAiItem(id: string): void;
@@ -163,6 +172,8 @@ export const useStore = create<State>((set, get) => ({
   apps: null,
   appsLoading: false,
   diskBusy: false,
+  diskWholeBusy: false,
+  diskIntent: null,
   appsProgress: null,
   appSelection: new Set(),
 
@@ -308,6 +319,20 @@ export const useStore = create<State>((set, get) => ({
 
   closeWhatsNew() {
     set({ whatsNew: null });
+  },
+
+  setDiskWholeBusy(busy) {
+    set({ diskWholeBusy: busy });
+  },
+
+  openWholeDisk() {
+    set({ route: 'disk', diskIntent: 'whole' });
+  },
+
+  consumeDiskIntent() {
+    const intent = get().diskIntent;
+    if (intent) set({ diskIntent: null });
+    return intent;
   },
 
   setDiskBusy(busy) {

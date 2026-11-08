@@ -354,7 +354,48 @@
   text-shadow: none;
 }
 
+/* O cartão inteiro é um botão que leva ao disco inteiro; a dica do (i) fica por cima dele. */
+.hero__open {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: pointer;
+}
+
+.hero__open:disabled {
+  cursor: default;
+}
+
+.hero__open:focus-visible {
+  outline: 2px solid var(--accent-300);
+  outline-offset: -2px;
+}
+
+.hero:has(.hero__open:hover:not(:disabled)) {
+  box-shadow: var(--glow-line), var(--shadow-card);
+}
+
+.hero__more {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-top: 8px;
+  color: var(--accent-300);
+  font-size: 11.5px;
+}
+
+.hero:has(.hero__open:hover:not(:disabled)) .hero__more {
+  color: var(--glow-soft);
+}
+
 .hero__info {
+  position: relative;
+  z-index: 2;
   display: grid;
   place-items: center;
   width: 20px;
@@ -1862,76 +1903,346 @@
   user-select: text;
 }
 
-.disk__intro {
-  display: flex;
-  flex-direction: column;
+/* ---------------------------------------------------------------------------
+ * Disco inteiro
+ * ------------------------------------------------------------------------- */
+
+.whole {
+  gap: 14px;
+}
+
+.whole--loading {
+  min-height: 140px;
   align-items: center;
-  gap: 10px;
-  max-width: 460px;
-  text-align: center;
+  justify-content: center;
 }
 
-.disk__intro .btn {
-  margin-top: 8px;
+.whole__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.disk__volume {
+.whole__title {
+  margin: 4px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.whole__head-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
   gap: 12px;
 }
 
-/* Pasta pessoal, o resto do que está usado e, no trilho, o livre. */
-.disk__stack {
+/* Do macOS em cinzas, o não identificado hachurado, o seu nas cores das séries; o trilho é o livre. */
+.whole__bar {
   display: flex;
   gap: 2px;
-  height: 12px;
+  height: 14px;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: 7px;
   background: rgba(255, 255, 255, 0.07);
 }
 
-.disk__segment {
+.whole__slice {
+  flex-basis: 0;
   min-width: 2px;
   border-radius: 4px;
 }
 
-.disk__segment--home,
-.disk__swatch--home {
-  background: var(--accent-400);
+.whole__slice--free {
+  background: transparent;
 }
 
-.disk__segment--other,
-.disk__swatch--other {
-  background: var(--neutral-600);
+.whole__slice--hatch,
+.whole__swatch--hatch {
+  background: repeating-linear-gradient(135deg, var(--neutral-600) 0 3px, rgba(255, 255, 255, 0.06) 3px 6px);
 }
 
-.disk__swatch--free {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.disk__legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 22px;
+.whole__summary {
+  margin: 0;
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
-.disk__legend span {
-  display: inline-flex;
+.whole__notice {
+  display: flex;
   align-items: center;
-  gap: 7px;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.disk__legend strong {
-  color: var(--text-primary);
+.whole__groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.whole__group,
+.whole__home {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.whole__group-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 0 8px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.whole__group-title strong {
+  color: var(--text-secondary);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
-.disk__swatch {
+.whole__list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.whole__row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto 46px;
+  align-items: start;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.whole__home-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto 46px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.whole__row:nth-child(odd),
+.whole__home-row:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.whole__swatch {
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 3px;
+}
+
+.whole__swatch--free {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.whole__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.whole__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.whole__lock {
+  display: inline-grid;
+  place-items: center;
+  color: var(--text-faint);
+}
+
+.whole__tip {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.whole__parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  max-width: 100%;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.whole__chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.whole__path {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-tertiary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.whole__path:hover,
+.whole__path:focus-visible {
+  color: var(--accent-300);
+  text-decoration: underline;
+}
+
+.whole__size {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.whole__share {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.whole__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-300);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.whole__action:hover,
+.whole__action:focus-visible {
+  color: var(--glow-soft);
+}
+
+.whole__pending,
+.whole__progress {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.whole__pending .whole__swatch {
+  flex: none;
+}
+
+.whole__pending p {
+  margin: 4px 0 10px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.whole__progress {
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.whole__phase {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.whole__phase--done {
+  color: var(--text-tertiary);
+}
+
+.whole__check {
   width: 9px;
   height: 9px;
-  border-radius: 3px;
+  margin: 0 2px;
+  border-radius: 50%;
+  background: var(--positive);
+}
+
+.whole__check--failed {
+  background: var(--warning);
+}
+
+.whole__reconcile {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.whole__reconcile summary {
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.whole__reconcile p {
+  margin: 6px 0 0;
+  line-height: 1.45;
+}
+
+.disk__elsewhere {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.disk__elsewhere .card__empty {
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.disk__folder-measuring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+  white-space: nowrap;
 }
 
 .disk__notice {
