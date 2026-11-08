@@ -1,5 +1,5 @@
 import { app, ipcMain, nativeImage, type WebContents } from 'electron';
-import type { CategoryId } from '../core/types';
+import type { CategoryId, ItemFlag } from '../core/types';
 import {
   CHANNELS,
   type AiItemDTO,
@@ -170,7 +170,30 @@ function scanFixtures(lang: Lang): Record<CategoryId, ItemDTO[]> {
       ['Figma', '~/Library/Application Support/Figma', 0.41 * GB],
       ['Notion', '~/Library/Application Support/Notion', 0.18 * GB],
     ]),
+    simulators: devices([
+      ['iPhone 17 Pro', 'iOS 26.2', 'A3F1C2D4-7B21-4C8E-9F10-2D6E8B4A1C01', 3.4 * GB, 2],
+      ['iPad Air 13-inch (M3)', 'iOS 26.2', 'B7E2D9A1-3C44-4F0B-8A21-6E9D2F7C3B02', 2.6 * GB, 18],
+      ['iPhone 16', 'iOS 18.6', 'C9D4E1F2-5A66-4B3C-9D42-8F1A3E5B6C03', 2.2 * GB, 210, ['unavailable']],
+      ['iPhone SE (3rd generation)', 'iOS 18.6', 'D1E5F2A3-6B77-4C4D-8E53-9A2B4F6C7D04', 1.3 * GB, 240, ['unavailable']],
+      [t(L('iPhone de testes', 'Test iPhone')), 'iPhone 17 · iOS 26.2', 'E2F6A3B4-7C88-4D5E-9F64-1B3C5A7D8E05', 0.9 * GB, 95],
+      ['Pixel 9 API 35', 'Android 15 · API 35 · Google Play', '~/.android/avd/Pixel_9_API_35.avd', 6.8 * GB, 0, ['running']],
+      ['Pixel 7 API 33', 'Android 13 · API 33 · Google APIs', '~/.android/avd/Pixel_7_API_33.avd', 4.1 * GB, 160, ['unavailable']],
+      ['Pixel Tablet API 34', 'Android 14 · API 34 · Google Play', '~/.android/avd/Pixel_Tablet_API_34.avd', 3.7 * GB, 41],
+    ]),
   };
+}
+
+type DeviceFixture = [name: string, detail: string, where: string, size: number, usedDaysAgo: number, flags?: ItemFlag[]];
+
+/** Aparelhos virtuais: o UDID vira a pasta do simulador; o resto já é o caminho do AVD. */
+function devices(fixtures: DeviceFixture[]): ItemDTO[] {
+  return fixtures.map(([name, detail, where, size, days, flags]) => {
+    const path = where.startsWith('~')
+      ? HOME + where.slice(1)
+      : `${HOME}/Library/Developer/CoreSimulator/Devices/${where}`;
+    const usedAt = Date.now() - days * DAY - 3 * 60 * 60 * 1000;
+    return { name, path, size: Math.round(size), isDirectory: true, modifiedAt: usedAt, detail, usedAt, ...(flags ? { flags } : {}) };
+  });
 }
 
 // ---------------------------------------------------------------------------

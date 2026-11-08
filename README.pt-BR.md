@@ -67,7 +67,7 @@ abrir a categoria e escolher item a item.
 | Grupo | Categorias |
 | --- | --- |
 | Lixo do sistema | cache de aplicativos, logs, temporários, arquivos de idioma, launch agents órfãos, sobras de apps removidos |
-| Desenvolvimento | caches de npm/Yarn/pnpm/pip/Gradle/Cargo/CocoaPods/Xcode, Homebrew, Docker, `node_modules` parados |
+| Desenvolvimento | caches de npm/Yarn/pnpm/pip/Gradle/Cargo/CocoaPods/Xcode, Homebrew, Docker, `node_modules` parados, simuladores do iOS e emuladores do Android (cada um com o tamanho, a versão do sistema e quando foi aberto) |
 | Armazenamento | Lixeira, downloads antigos, backups do iOS, anexos do Mail, arquivos duplicados |
 | Navegadores | cache do Chrome, Safari, Firefox e Arc |
 | Arquivos grandes | arquivos acima de 500 MB em Downloads e Documentos |

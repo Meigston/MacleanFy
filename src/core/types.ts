@@ -15,7 +15,8 @@ export type CategoryId =
   | 'node-modules'
   | 'duplicates'
   | 'launch-agents'
-  | 'app-leftovers';
+  | 'app-leftovers'
+  | 'simulators';
 
 export type CategoryGroup = 'System Junk' | 'Development' | 'Storage' | 'Browsers' | 'Large Files';
 
@@ -31,12 +32,20 @@ export interface Category {
   supportsFileSelection?: boolean;
 }
 
+/** What the interface warns about an item. A `running` item cannot be ticked. */
+export type ItemFlag = 'running' | 'unavailable';
+
 export interface CleanableItem {
   path: string;
   size: number;
   name: string;
   isDirectory: boolean;
   modifiedAt?: Date;
+  /** Says more than the path does, shown in its place (e.g. "iPhone 17 Pro · iOS 26.2"). */
+  detail?: string;
+  /** When it was last opened, for items that are opened rather than written to. */
+  usedAt?: Date;
+  flags?: ItemFlag[];
 }
 
 export interface ScanResult {
@@ -212,6 +221,14 @@ export const CATEGORIES: Record<CategoryId, Category> = {
     description: 'Caches, preferences and data of apps no longer on this Mac, untouched for over 30 days',
     safetyLevel: 'moderate',
     safetyNote: 'Only apps macOS cannot find anywhere are listed. Reinstalling one later starts from scratch.',
+  },
+  'simulators': {
+    id: 'simulators',
+    name: 'Simulators and Emulators',
+    group: 'Development',
+    description: 'iOS simulators (Xcode) and Android emulators (Android Studio), with the space each one takes',
+    safetyLevel: 'moderate',
+    safetyNote: 'Deleting a virtual device removes its apps and data; you can create a new one in Xcode or Android Studio. The ones open right now cannot be ticked.',
   },
 };
 

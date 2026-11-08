@@ -16,6 +16,7 @@ import { NodeModulesScanner } from './node-modules.js';
 import { DuplicatesScanner } from './duplicates.js';
 import { LaunchAgentsScanner } from './launch-agents.js';
 import { AppLeftoversScanner } from './app-leftovers.js';
+import { SimulatorsScanner } from './simulators.js';
 
 export const ALL_SCANNERS: Record<CategoryId, Scanner> = {
   'system-cache': new SystemCacheScanner(),
@@ -35,6 +36,7 @@ export const ALL_SCANNERS: Record<CategoryId, Scanner> = {
   'duplicates': new DuplicatesScanner(),
   'launch-agents': new LaunchAgentsScanner(),
   'app-leftovers': new AppLeftoversScanner(),
+  'simulators': new SimulatorsScanner(),
 };
 
 export function getScanner(categoryId: CategoryId): Scanner {
@@ -67,4 +69,5 @@ export {
   DuplicatesScanner,
   LaunchAgentsScanner,
   AppLeftoversScanner,
+  SimulatorsScanner,
 };

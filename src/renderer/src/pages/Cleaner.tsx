@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, CircleAlert, FolderOpen, Sparkles } from 'lucide-react';
 import { CATEGORIES, type CategoryGroup, type CategoryId } from '../../../core/types';
-import type { ScanResultDTO } from '../../../shared/api';
+import type { ItemDTO, ScanResultDTO } from '../../../shared/api';
 import { CleanDialog } from '../components/CleanDialog';
 import { BrandSymbol, Button, Checkbox, SafetyBadge, Spinner, shortPath, type CheckState } from '../components/ui';
 import { useT } from '../i18n';
 import { CATEGORY_ICONS, GROUPS, GROUP_BY_NAME, categoriesOf } from '../lib/catalog';
-import { selectedOf, useStore } from '../state/store';
+import { isLocked, selectedOf, useStore } from '../state/store';
 
 /** Uma categoria pode ter milhares de itens; a lista aberta mostra os maiores. */
 const VISIBLE_ITEMS = 200;
@@ -31,9 +31,16 @@ function CategoryRow({ id, result, pending, open, onToggleOpen }: CategoryRowPro
   const Icon = CATEGORY_ICONS[id];
 
   const count = result?.items.length ?? 0;
+  // Um aparelho aberto aparece na lista mas não entra na seleção; "tudo" é tudo o que dá para marcar.
+  const selectable = result?.items.filter((item) => !isLocked(item)).length ?? 0;
   const chosen = selectedOf(result, selected);
-  const state: CheckState = chosen.count === 0 ? 'off' : chosen.count === count ? 'on' : 'mixed';
+  const state: CheckState = chosen.count === 0 ? 'off' : chosen.count >= selectable ? 'on' : 'mixed';
   const expandable = count > 0 && !pending;
+
+  const subtitle = (item: ItemDTO) => {
+    if (!item.detail) return shortPath(item.path);
+    return item.usedAt ? `${item.detail} · ${t('cleaner.item.used', { ago: tr.ago(item.usedAt) })}` : item.detail;
+  };
 
   const items = useMemo(
     () => (open && result ? [...result.items].sort((a, b) => b.size - a.size).slice(0, VISIBLE_ITEMS) : []),
@@ -59,7 +66,7 @@ function CategoryRow({ id, result, pending, open, onToggleOpen }: CategoryRowPro
       >
         <Checkbox
           state={state}
-          disabled={!expandable}
+          disabled={!expandable || selectable === 0}
           label={text.name}
           onChange={(checked) => setCategorySelected(id, checked)}
         />
@@ -101,37 +108,57 @@ function CategoryRow({ id, result, pending, open, onToggleOpen }: CategoryRowPro
       {open && result && (
         <div className="cat__items">
           {text.note && <p className={`cat__note cat__note--${category.safetyLevel}`}>{text.note}</p>}
-          {items.map((item) => (
-            <div key={item.path} className="item" onClick={() => toggleItem(id, item.path)}>
-              <Checkbox
-                state={selected?.has(item.path) ? 'on' : 'off'}
-                label={item.name}
-                onChange={() => toggleItem(id, item.path)}
-              />
-              <span className="item__text">
-                <span className="item__name">{item.name}</span>
-                <span className="item__path">{shortPath(item.path)}</span>
-              </span>
-              <span className="item__size">{tr.size(item.size)}</span>
-              {item.path.startsWith('/') ? (
-                <button
-                  type="button"
-                  className="item__reveal"
-                  aria-label={t('action.reveal')}
-                  data-tip={t('action.reveal')}
-                  data-tip-pos="left"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void window.macleanfy.system.reveal(item.path);
-                  }}
-                >
-                  <FolderOpen size={14} />
-                </button>
-              ) : (
-                <span />
-              )}
-            </div>
-          ))}
+          {items.map((item) => {
+            const locked = isLocked(item);
+            return (
+              <div
+                key={item.path}
+                className={locked ? 'item item--locked' : 'item'}
+                onClick={locked ? undefined : () => toggleItem(id, item.path)}
+              >
+                <Checkbox
+                  state={selected?.has(item.path) ? 'on' : 'off'}
+                  label={item.name}
+                  disabled={locked}
+                  onChange={() => toggleItem(id, item.path)}
+                />
+                <span className="item__text">
+                  <span className="item__name">
+                    {item.name}
+                    {item.flags?.map((flag) => (
+                      <span
+                        key={flag}
+                        className={`item__tag item__tag--${flag}`}
+                        data-tip={t(`cleaner.flag.${flag}.tip`)}
+                        data-tip-pos="top"
+                      >
+                        {t(`cleaner.flag.${flag}`)}
+                      </span>
+                    ))}
+                  </span>
+                  <span className="item__path">{subtitle(item)}</span>
+                </span>
+                <span className="item__size">{tr.size(item.size)}</span>
+                {item.path.startsWith('/') ? (
+                  <button
+                    type="button"
+                    className="item__reveal"
+                    aria-label={t('action.reveal')}
+                    data-tip={t('action.reveal')}
+                    data-tip-pos="left"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void window.macleanfy.system.reveal(item.path);
+                    }}
+                  >
+                    <FolderOpen size={14} />
+                  </button>
+                ) : (
+                  <span />
+                )}
+              </div>
+            );
+          })}
           {count > items.length && <p className="cat__more">{t('cleaner.more', { count: count - items.length })}</p>}
         </div>
       )}

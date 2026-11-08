@@ -9,6 +9,7 @@ import type {
   CleanSummaryDTO,
   History,
   InstalledAppDTO,
+  ItemDTO,
   ScanResultDTO,
   SystemInfo,
   UninstallOptionsDTO,
@@ -125,9 +126,14 @@ interface State {
  * O Docker fica de fora mesmo sendo "seguro": a limpeza dele é um prune de tudo
  * o que não está em uso — dezenas de GB de imagens num clique que ninguém pediu.
  */
+/** Item que está aberto agora (um simulador ligado, por exemplo): aparece, mas não se marca. */
+export function isLocked(item: ItemDTO): boolean {
+  return item.flags?.includes('running') ?? false;
+}
+
 function defaultSelection(result: ScanResultDTO): ReadonlySet<string> {
   const preselected = CATEGORIES[result.categoryId].safetyLevel === 'safe' && result.categoryId !== 'docker';
-  return preselected ? new Set(result.items.map((item) => item.path)) : new Set();
+  return preselected ? new Set(result.items.filter((item) => !isLocked(item)).map((item) => item.path)) : new Set();
 }
 
 let subscribed = false;
@@ -241,11 +247,15 @@ export const useStore = create<State>((set, get) => ({
   setCategorySelected(id, selected) {
     const result = get().results[id];
     if (!result) return;
-    const paths = selected ? new Set(result.items.map((item) => item.path)) : new Set<string>();
+    const paths = selected
+      ? new Set(result.items.filter((item) => !isLocked(item)).map((item) => item.path))
+      : new Set<string>();
     set((state) => ({ selection: { ...state.selection, [id]: paths } }));
   },
 
   toggleItem(id, path) {
+    const item = get().results[id]?.items.find((entry) => entry.path === path);
+    if (item && isLocked(item)) return;
     const next = new Set(get().selection[id]);
     if (!next.delete(path)) next.add(path);
     set((state) => ({ selection: { ...state.selection, [id]: next } }));

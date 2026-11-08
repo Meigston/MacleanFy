@@ -22,6 +22,7 @@ describe("scanners index", () => {
       "duplicates",
       "launch-agents",
       "app-leftovers",
+      "simulators",
     ];
 
     expect(Object.keys(ALL_SCANNERS).sort()).toEqual(expectedIds.sort());
@@ -37,7 +38,7 @@ describe("scanners index", () => {
   it("should get all scanners", () => {
     const scanners = getAllScanners();
 
-    expect(scanners).toHaveLength(17);
+    expect(scanners).toHaveLength(18);
     for (const scanner of scanners) {
       expect(scanner.category).toBeDefined();
       expect(scanner.scan).toBeDefined();

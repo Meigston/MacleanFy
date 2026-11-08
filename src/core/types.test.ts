@@ -21,6 +21,7 @@ describe('CATEGORIES', () => {
       'duplicates',
       'launch-agents',
       'app-leftovers',
+      'simulators',
     ];
 
     expect(Object.keys(CATEGORIES).sort()).toEqual(expectedIds.sort());

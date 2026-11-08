@@ -18,6 +18,7 @@ import {
   Rocket,
   ScrollText,
   Smartphone,
+  TabletSmartphone,
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
@@ -62,6 +63,7 @@ export const CATEGORY_ICONS: Record<CategoryId, LucideIcon> = {
   duplicates: Copy,
   'launch-agents': Rocket,
   'app-leftovers': PackageX,
+  simulators: TabletSmartphone,
 };
 
 export const ALL_CATEGORY_IDS = Object.keys(CATEGORIES) as CategoryId[];

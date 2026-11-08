@@ -920,6 +920,25 @@
   white-space: nowrap;
 }
 
+.item__tag--running {
+  background: rgba(126, 224, 168, 0.12);
+  color: var(--positive);
+}
+
+.item__tag--unavailable {
+  background: var(--warning-surface);
+  color: var(--warning);
+}
+
+.item--locked {
+  cursor: default;
+}
+
+.item--locked .item__name,
+.item--locked .item__size {
+  color: var(--text-tertiary);
+}
+
 .item__reveal {
   display: grid;
   place-items: center;

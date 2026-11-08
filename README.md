@@ -55,7 +55,7 @@ open a category to pick item by item.
 | Group | Categories |
 | --- | --- |
 | System junk | app caches, logs, temporary files, language files, orphaned launch agents |
-| Development | npm/Yarn/pnpm/pip/Gradle/Cargo/CocoaPods/Xcode caches, Homebrew, Docker, stale `node_modules` |
+| Development | npm/Yarn/pnpm/pip/Gradle/Cargo/CocoaPods/Xcode caches, Homebrew, Docker, stale `node_modules`, iOS simulators and Android emulators (each with its size, system version and when it was last opened) |
 | Storage | Trash, old downloads, iOS backups, Mail attachments, duplicate files |
 | Browsers | Chrome, Safari, Firefox and Arc caches |
 | Large files | files over 500 MB in Downloads and Documents |

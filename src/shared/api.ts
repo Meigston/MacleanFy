@@ -1,4 +1,4 @@
-import type { CategoryId } from '../core/types';
+import type { CategoryId, ItemFlag } from '../core/types';
 import type { PixOption } from './support';
 
 /**
@@ -56,6 +56,12 @@ export interface ItemDTO {
   isDirectory: boolean;
   /** Milissegundos desde a época. */
   modifiedAt?: number;
+  /** Diz mais que o caminho e aparece no lugar dele (ex.: "iPhone 17 Pro · iOS 26.2"). */
+  detail?: string;
+  /** Quando foi aberto pela última vez, nos itens que se abrem em vez de se escrever. */
+  usedAt?: number;
+  /** Avisos que a interface traduz. Item `running` não pode ser marcado. */
+  flags?: ItemFlag[];
 }
 
 export interface ScanResultDTO {
