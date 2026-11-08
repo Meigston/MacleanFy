@@ -21,6 +21,20 @@ import {
 import { COLLECTORS } from './ai/collectors';
 import { isToggleable } from './startup';
 import { getSystemInfo } from './system';
+import type { ApfsContainer } from './volume';
+import {
+  DATA_ROOT,
+  DEFAULT_FIRMLINKS,
+  assemble,
+  carveHome,
+  classifyOutside,
+  outsideCarves,
+  outsideOperands,
+  userVarFolder,
+  visiblePath,
+  wholeOptions,
+  type OutsideMeasure,
+} from './whole-disk';
 
 /**
  * Ferramenta de desenvolvimento: `MACLEANFY_DEMO=1` troca o disco, os apps e o
@@ -447,6 +461,85 @@ function diskTree(lang: Lang): Node {
 }
 
 // ---------------------------------------------------------------------------
+// Disco inteiro
+// ---------------------------------------------------------------------------
+
+/** A pasta temporária da conta de demonstração, como o os.tmpdir() a daria. */
+const DEMO_TMP = '/var/folders/x1/k2m9q7_d4z81r6wq0000gn/T';
+
+/** Os volumes do sistema de um Mac de 512 GB, em bytes; o de dados sai do espaço livre. */
+const DEMO_VOLUMES = [
+  { device: 'disk3s1', name: 'Macintosh HD', roles: ['System'], inUse: 12.46 * GB },
+  { device: 'disk3s2', name: 'Preboot', roles: ['Preboot'], inUse: 9.87 * GB },
+  { device: 'disk3s3', name: 'Recovery', roles: ['Recovery'], inUse: 2.51 * GB },
+  { device: 'disk3s4', name: 'Update', roles: ['Update'], inUse: 0.006 * GB },
+  { device: 'disk3s6', name: 'VM', roles: ['VM'], inUse: 4.29 * GB },
+];
+const DEMO_STRUCTURE = 0.16 * GB;
+
+/** O que o du de fora da pasta pessoal acharia, como árvore a partir da raiz do volume de dados. */
+function outsideTree(): Node[] {
+  return [
+    dir('Applications', [
+      file('Xcode.app', 12.1 * GB),
+      file('Logic Pro.app', 7.9 * GB),
+      file('Rider.app', 6.5 * GB),
+      file('Final Cut Pro.app', 6.2 * GB),
+      file('DaVinci Resolve.app', 4.8 * GB),
+      file('Android Studio.app', 3.1 * GB),
+      file('Microsoft Word.app', 2.6 * GB),
+      file('GarageBand.app', 2.6 * GB),
+      file('Microsoft Excel.app', 2.2 * GB),
+      file('Docker.app', 2.1 * GB),
+      file('Microsoft PowerPoint.app', 1.9 * GB),
+      file('Blender.app', 1.9 * GB),
+      file('Google Chrome.app', 1.6 * GB),
+      file('Parallels Desktop.app', 1.4 * GB),
+      file('Pixelmator Pro.app', 0.9 * GB),
+      file('Visual Studio Code.app', 0.7 * GB),
+      file('Keynote.app', 0.7 * GB),
+      file('Slack.app', 0.6 * GB),
+      file('Pages.app', 0.6 * GB),
+      file('zoom.us.app', 0.5 * GB),
+      file('Numbers.app', 0.5 * GB),
+      file('Spotify.app', 0.4 * GB),
+    ]),
+    dir('Library', [
+      dir('Developer', [file('CoreSimulator', 18.9 * GB), file('CommandLineTools', 2.7 * GB)]),
+      file('Caches', 1.1 * GB),
+      dir('Application Support', [file('Logic', 58.9 * GB), file('GarageBand', 4.2 * GB), file('Native Instruments', 3.1 * GB)]),
+      file('Audio', 5.8 * GB),
+      file('Frameworks', 1.0 * GB),
+      file('Fonts', 0.7 * GB),
+    ]),
+    dir('opt', [file('homebrew', 6.3 * GB)]),
+    dir('usr', [file('local', 2.4 * GB)]),
+    dir('private', [
+      dir('tmp', [file('node-compile-cache', 2.3 * GB), file('vscode-typescript501', 0.8 * GB)]),
+      dir('var', [
+        dir('folders', [dir('x1', [dir('k2m9q7_d4z81r6wq0000gn', [file('T', 13.9 * GB), file('C', 2.0 * GB)])])]),
+        file('tmp', 0.4 * GB),
+        file('vm', 1.07 * GB),
+        file('db', 2.6 * GB),
+        file('log', 0.83 * GB),
+      ]),
+    ]),
+    dir('System', [dir('Library', [file('AssetsV2', 7.2 * GB), file('Speech', 1.3 * GB), file('Caches', 1.1 * GB)])]),
+    dir('Users', [file('Shared', 0.2 * GB)]),
+  ];
+}
+
+/** Uma árvore como as linhas que o du daria: cada pasta com o caminho e o total dela. */
+function flatten(nodes: Node[], parent: string, into = new Map<string, number>()): Map<string, number> {
+  for (const node of nodes) {
+    const path = `${parent}/${node.name}`;
+    into.set(path, Math.round(node.size));
+    if (node.children) flatten(node.children, path, into);
+  }
+  return into;
+}
+
+// ---------------------------------------------------------------------------
 // Sessões de IA
 // ---------------------------------------------------------------------------
 
@@ -659,7 +752,21 @@ export function registerDemoIpc(): void {
       { at: now - 27 * DAY, kind: 'clean', freedSpace: 16.5 * GB, items: 1560, labels: ['system-cache', 'dev-cache', 'node-modules'] },
     ],
   };
-  const maintenance = { noDsStore: false, snapshots: ['2026-10-25-093011', '2026-10-26-101544', '2026-10-27-084902'] };
+  const maintenance = {
+    noDsStore: false,
+    snapshots: ['2026-10-25-093011', '2026-10-26-101544', '2026-10-27-084902'],
+    purgeable: 18.6 * GB,
+  };
+  // O disco inteiro: o que já foi medido fora da pasta pessoal, e quando.
+  const outside = outsideTree();
+  const whole = {
+    outside: null as OutsideMeasure | null,
+    homeAt: null as number | null,
+    dataAtMeasure: null as number | null,
+    changedAt: null as number | null,
+    /** O que a limpeza tirou e a próxima medida ainda não viu. */
+    cleaned: 0,
+  };
 
   const handle = (channel: string, listener: (sender: WebContents, ...args: unknown[]) => unknown) =>
     ipcMain.handle(channel, (event, ...args) => listener(event.sender, ...args));
@@ -734,6 +841,10 @@ export function registerDemoIpc(): void {
     if (!dryRun) {
       for (const entry of plan) cleaned.add(entry.id);
       disk.free += totalBytes;
+      if (totalCleanedItems > 0) {
+        whole.cleaned += totalBytes;
+        whole.changedAt = Date.now();
+      }
       history.totalFreedSpace += totalBytes;
       history.totalItems += totalCleanedItems;
       history.entries.unshift({
@@ -875,14 +986,17 @@ export function registerDemoIpc(): void {
     if (!parent || index < 0) return false;
     await sleep(500);
     const [gone] = parent.node.children!.splice(index, 1);
-    // Os tamanhos de cima descontam o que saiu, até a pasta pessoal.
+    // As pastas entre o item e a pasta pessoal descontam o que saiu; ele vai para a ~/.Trash,
+    // que é da própria pasta pessoal: o total dela e o espaço livre ficam como estão.
     let node: Node = tree;
-    tree.size -= gone.size;
     for (const crumb of parent.crumbs.slice(1)) {
       node = node.children!.find((child) => child.name === crumb.name)!;
       node.size -= gone.size;
     }
-    // Na Lixeira o arquivo ainda ocupa o disco: o espaço livre fica como está.
+    let trash = tree.children!.find((child) => child.name === '.Trash');
+    if (!trash) tree.children!.push((trash = { name: '.Trash', size: 0, children: [] }));
+    trash.children!.push(gone);
+    trash.size += gone.size;
     return true;
   });
 
@@ -919,12 +1033,130 @@ export function registerDemoIpc(): void {
 
   handle(CHANNELS.maintenanceInfo, async () => {
     await sleep(200);
-    return { purgeable: Math.round(18.6 * GB), snapshots: maintenance.snapshots, spotlight: true, noDsStore: maintenance.noDsStore };
+    return { purgeable: Math.round(maintenance.purgeable), snapshots: maintenance.snapshots, spotlight: true, noDsStore: maintenance.noDsStore };
   });
   handle(CHANNELS.maintenanceRun, async (_sender, task) => {
     await sleep(task === 'spotlight' ? 2200 : 1500);
-    if (task === 'snapshots') maintenance.snapshots = [];
+    if (task === 'snapshots' && maintenance.snapshots.length > 0) {
+      // Os snapshots eram parte do purgável: saem dele e voltam como espaço livre.
+      maintenance.snapshots = [];
+      disk.free += 11.4 * GB;
+      maintenance.purgeable -= 11.4 * GB;
+      whole.changedAt = Date.now();
+    }
     return { success: true };
+  });
+
+  /** O volume de dados agora: o que está usado, menos os volumes do sistema. */
+  const dataNow = () =>
+    disk.total - disk.free - DEMO_VOLUMES.reduce((sum, volume) => sum + volume.inUse, 0) - DEMO_STRUCTURE;
+
+  /** Tira até `amount` de dentro de um nó, das folhas para cima, para cada pasta seguir somando o que mostra. */
+  const drain = (node: Node, amount: number): number => {
+    if (amount <= 0) return 0;
+    let taken = 0;
+    if (node.children && node.children.length > 0) {
+      for (const child of [...node.children].sort((a, b) => b.size - a.size)) {
+        if (taken >= amount) break;
+        taken += drain(child, amount - taken);
+      }
+    } else taken = Math.min(amount, node.size);
+    node.size -= taken;
+    return taken;
+  };
+
+  /** Tira até `amount` de uma pasta da árvore e das de cima dela; devolve o que tirou. */
+  const shrinkIn = (roots: Node[], parts: string[], amount: number, above: Node[] = []) => {
+    const chain: Node[] = [];
+    let list: Node[] | undefined = roots;
+    for (const part of parts) {
+      const next: Node | undefined = list?.find((child) => child.name === part);
+      if (!next) return 0;
+      chain.push(next);
+      list = next.children;
+    }
+    const taken = drain(chain[chain.length - 1], amount);
+    for (const entry of [...above, ...chain.slice(0, -1)]) entry.size -= taken;
+    return taken;
+  };
+
+  handle(CHANNELS.diskWhole, async (sender, options) => {
+    const { measure, refresh } = wholeOptions(options);
+    const lang = (process.env.MACLEANFY_LOCALE ?? '').startsWith('en') ? 'en' : 'pt';
+    if (measure || refresh) {
+      // O que a limpeza tirou sai das pastas onde ela mexe, para a medida nova fechar a conta.
+      let left = whole.cleaned;
+      left -= shrinkIn(outside, ['private', 'var', 'folders', 'x1', 'k2m9q7_d4z81r6wq0000gn', 'T'], left);
+      left -= shrinkIn(outside, ['private', 'tmp', 'node-compile-cache'], left);
+      for (const parts of [['Library', 'Caches'], ['Library', 'Application Support'], ['Downloads'], [L('Projetos', 'Projects')[lang]], ['Movies']]) {
+        left -= shrinkIn(tree.children ?? [], parts, left, [tree]);
+      }
+      whole.cleaned = 0;
+      const varFolder = userVarFolder(DEMO_TMP)!;
+      const sizes = flatten(outside, DATA_ROOT);
+      const changed = whole.changedAt ?? 0;
+
+      if (refresh || !whole.outside || changed > whole.outside.at) {
+        whole.outside = null;
+        let bytes = 0;
+        for (const node of outside) {
+          bytes += node.size;
+          send(sender, CHANNELS.diskWholeProgress, { phase: 'outside', bytes, path: `${DATA_ROOT}/${node.name}` });
+          await sleep(110);
+        }
+        const top = outside.map((node) => ({ name: node.name, sameDevice: true, symlink: false, directory: true }));
+        const users = [
+          { name: 'Shared', sameDevice: true, symlink: false, directory: true },
+          { name: 'ana', sameDevice: true, symlink: false, directory: true },
+        ];
+        const operands = outsideOperands(top, users, 'ana', HOME);
+        whole.outside = classifyOutside(sizes, operands, outsideCarves(DATA_ROOT, varFolder, sizes), [], Date.now());
+        send(sender, CHANNELS.diskWholeProgress, { phase: 'outside', bytes: whole.outside.total, path: '', done: true });
+      }
+      if (refresh || !measured || changed > (whole.homeAt ?? 0)) {
+        let bytes = 0;
+        for (const child of [...(tree.children ?? [])].reverse()) {
+          bytes += child.size;
+          send(sender, CHANNELS.diskWholeProgress, { phase: 'home', bytes, path: `${HOME}/${child.name}` });
+          await sleep(70);
+        }
+        measured = true;
+        whole.homeAt = Date.now();
+        send(sender, CHANNELS.diskWholeProgress, { phase: 'home', bytes: tree.size, path: '', done: true });
+      }
+      whole.dataAtMeasure = dataNow();
+    }
+
+    const data = dataNow();
+    const container: ApfsContainer = {
+      reference: 'disk3',
+      ceiling: Math.round(disk.total),
+      free: Math.round(disk.free),
+      volumes: [...DEMO_VOLUMES, { device: 'disk3s5', name: 'Macintosh HD - Data', roles: ['Data'], inUse: data }].map((volume) => ({
+        ...volume,
+        inUse: Math.round(volume.inUse),
+      })),
+    };
+    const homeSizes = measured ? flatten(tree.children ?? [], HOME, new Map([[HOME, Math.round(tree.size)]])) : null;
+    return assemble({
+      apfs: { container, system: 'disk3s1s1', data: 'disk3s5' },
+      statfs: { total: container.ceiling, free: container.free, dataUsed: null },
+      volumeName: disk.volumeName,
+      purgeable: Math.round(maintenance.purgeable),
+      snapshots: maintenance.snapshots,
+      outside: whole.outside,
+      home: homeSizes
+        ? { bytes: Math.round(tree.size), shares: carveHome(homeSizes, HOME, []), partial: false, at: whole.homeAt ?? Date.now() - 4000 }
+        : null,
+      homeOnData: true,
+      homePath: HOME,
+      phases: { outside: whole.outside ? 'done' : 'idle', home: measured ? 'done' : 'idle' },
+      dataAtMeasure: whole.dataAtMeasure,
+      changedAt: whole.changedAt,
+      otherAccounts: 0,
+      fullDiskAccess: true,
+      visible: (path) => visiblePath(path, DEFAULT_FIRMLINKS),
+    });
   });
   handle(CHANNELS.maintenanceNoDsStore, async (_sender, on) => {
     await sleep(300);
