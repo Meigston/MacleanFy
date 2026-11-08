@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, ChartPie, ChevronRight, File, Folder, FolderOpen, RefreshCw, Trash2 } from 'lucide-react';
-import type { DiskEntryDTO, DiskFolderDTO, DiskProgress } from '../../../shared/api';
+import { isInPhotosLibrary, type DiskEntryDTO, type DiskFolderDTO, type DiskProgress } from '../../../shared/api';
 import { Button, Modal, Spinner, shortPath } from '../components/ui';
 import { useT } from '../i18n';
 import { useStore } from '../state/store';
@@ -235,7 +235,7 @@ export function Disk() {
                       >
                         <FolderOpen size={14} />
                       </button>
-                      {trashable && (
+                      {trashable && !isInPhotosLibrary(entry.path) && (
                         <button
                           type="button"
                           className="item__reveal disk__trash"

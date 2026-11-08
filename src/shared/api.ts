@@ -224,6 +224,12 @@ export interface DiskProgress {
   path: string;
 }
 
+/**
+ * A fototeca do Fotos é um pacote: inteira ou aos pedaços, nada dela vai para a
+ * Lixeira pelo explorador, ou o Fotos perde a biblioteca.
+ */
+export const isInPhotosLibrary = (path: string): boolean => /\.photoslibrary(\/|$)/i.test(path);
+
 /** Dias sem uso para o que uma ferramenta de IA deixou contar como frio. */
 export const AI_COLD_DAYS = 7;
 
