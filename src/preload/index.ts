@@ -41,6 +41,8 @@ const api: MacleanFyApi = {
     list: (path, options) => ipcRenderer.invoke(CHANNELS.diskList, path, options),
     onProgress: (listener) => subscribe(CHANNELS.diskProgress, listener),
     trash: (path) => ipcRenderer.invoke(CHANNELS.diskTrash, path),
+    whole: (options) => ipcRenderer.invoke(CHANNELS.diskWhole, options),
+    onWholeProgress: (listener) => subscribe(CHANNELS.diskWholeProgress, listener),
   },
   ai: {
     scan: () => ipcRenderer.invoke(CHANNELS.aiScan),

@@ -53,7 +53,7 @@ async function readVolumeName(): Promise<string> {
  * Sem Acesso Total ao Disco o macOS nega a leitura de ~/.Trash (e de Mail,
  * Safari e afins), e os scanners enxergam essas pastas como vazias.
  */
-async function hasFullDiskAccess(): Promise<boolean> {
+export async function hasFullDiskAccess(): Promise<boolean> {
   try {
     await readdir(join(homedir(), '.Trash'));
     return true;

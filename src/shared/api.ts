@@ -31,6 +31,8 @@ export const CHANNELS = {
   diskList: 'disk:list',
   diskProgress: 'disk:progress',
   diskTrash: 'disk:trash',
+  diskWhole: 'disk:whole',
+  diskWholeProgress: 'disk:whole-progress',
   aiScan: 'ai:scan',
   aiProgress: 'ai:progress',
   aiRemove: 'ai:remove',
@@ -225,10 +227,124 @@ export interface DiskProgress {
 }
 
 /**
+ * O disco inteiro, em partes que fecham a conta com o APFS. O que é do sistema
+ * vem dos volumes, na hora; o volume de dados é separado por duas medidas com
+ * `du` (fora da pasta pessoal, e a própria pasta pessoal), e o que nenhuma delas
+ * alcança aparece com o próprio nome, em vez de espalhado pelos outros.
+ */
+
+/**
  * A fototeca do Fotos é um pacote: inteira ou aos pedaços, nada dela vai para a
  * Lixeira pelo explorador, ou o Fotos perde a biblioteca.
  */
 export const isInPhotosLibrary = (path: string): boolean => /\.photoslibrary(\/|$)/i.test(path);
+
+/** Ordem fixa: é a ordem da barra, da legenda e das cores. */
+export const WHOLE_SEGMENTS = [
+  'macos',
+  'boot',
+  'vm',
+  'system-data',
+  'unknown',
+  'pending',
+  'caches',
+  'dev',
+  'home',
+  'apps',
+  'others',
+  'other-volumes',
+] as const;
+export type WholeSegmentId = (typeof WHOLE_SEGMENTS)[number];
+/** Do macOS (não dá para mexer), sem dono conhecido, ou da pessoa. */
+export type WholeGroup = 'system' | 'unknown' | 'yours';
+
+/** apfs: o volume informou; du: soma das pastas; rest: o que sobra de uma subtração; statfs: reserva sem APFS. */
+export type WholeSource = 'apfs' | 'du' | 'rest' | 'statfs';
+
+export interface WholePartDTO {
+  /** Nome do volume ("Preboot") ou caminho visível ("/Library/Developer"); vazio em `special`. */
+  label: string;
+  /** Caminho visível, para mostrar no Finder; ausente em volume e subtração. */
+  path?: string;
+  bytes: number;
+  source: WholeSource;
+  /** Partes sem nome próprio, que a interface traduz. */
+  special?: 'structure';
+}
+
+export interface WholeSegmentDTO {
+  id: WholeSegmentId;
+  group: WholeGroup;
+  bytes: number;
+  /** De onde vem cada byte: a soma das partes é `bytes`. */
+  parts: WholePartDTO[];
+  /** As maiores subpastas, para dizer onde dentro dele. */
+  top: Array<{ label: string; path: string; bytes: number }>;
+  /** O macOS negou alguma pasta daqui: o número é um piso. */
+  partial: boolean;
+}
+
+export const HOME_SHARES = ['dev', 'ai', 'caches', 'icloud', 'photos', 'mail', 'messages', 'trash', 'app-data', 'rest'] as const;
+export type HomeShareId = (typeof HOME_SHARES)[number];
+
+/** Uma fatia da pasta pessoal; as fatias somam a pasta inteira. */
+export interface HomeShareDTO {
+  id: HomeShareId;
+  bytes: number;
+  /** Caminhos que existem e entraram, do maior para o menor. */
+  paths: Array<{ path: string; bytes: number }>;
+  partial: boolean;
+}
+
+export type WholePhase = 'idle' | 'running' | 'done' | 'failed';
+
+export interface WholeDiskDTO {
+  volumeName: string;
+  /** `basic` quando o diskutil não respondeu: o sistema vira um bloco só, tirado do statfs. */
+  mode: 'apfs' | 'basic';
+  total: number;
+  free: number;
+  /** O que o Finder soma ao livre; já está dentro dos segmentos e nunca é somado de novo. */
+  purgeable: number | null;
+  /** Datas dos snapshots locais do Time Machine. */
+  snapshots: string[];
+  /** O que o volume de dados ocupa agora. */
+  data: number;
+  /** macOS, inicialização, recuperação e memória virtual, mais a estrutura do APFS. */
+  systemVolumes: number;
+  otherVolumes: number;
+  /** Estrutura do próprio APFS (já dentro de `boot`). */
+  overhead: number;
+  /** Na ordem de WHOLE_SEGMENTS, só os maiores que zero. Σ bytes + free === total quando overcount é 0. */
+  segments: WholeSegmentDTO[];
+  /** A pasta pessoal por fatias, que somam o segmento `home`. Nulo antes de medi-la. */
+  home: HomeShareDTO[] | null;
+  homePath: string;
+  phases: { outside: WholePhase; home: WholePhase };
+  /** A mais antiga das duas medidas; nulo enquanto alguma não terminou. */
+  measuredAt: number | null;
+  /** O quanto as pastas somam além do que o volume de dados ocupa (clones do APFS contados de novo). */
+  overcount: number;
+  /** Quanto o volume de dados mudou desde o fim da medida. */
+  drift: number;
+  /** A medida ficou para trás: o disco mudou mais de 1 GB, ou houve uma limpeza depois dela. */
+  stale: boolean;
+  /** A pasta pessoal fica em outro disco e não entra na conta. */
+  homeElsewhere: boolean;
+  /** Contas deste Mac que não dá para medir sem senha. */
+  otherAccounts: number;
+  fullDiskAccess: boolean;
+}
+
+export interface WholeDiskProgress {
+  phase: 'outside' | 'home';
+  bytes: number;
+  path: string;
+  /** A fase acabou (ou já estava medida e foi reaproveitada): a tela pede o disco de novo. */
+  done?: boolean;
+  /** A fase não terminou: a tela mostra o erro dela, sem o "pronto". */
+  failed?: boolean;
+}
 
 /** Dias sem uso para o que uma ferramenta de IA deixou contar como frio. */
 export const AI_COLD_DAYS = 7;
@@ -610,6 +726,12 @@ export interface MacleanFyApi {
     onProgress(listener: (progress: DiskProgress) => void): Unsubscribe;
     /** Só algo que a última listagem mostrou. */
     trash(path: string): Promise<boolean>;
+    /**
+     * O disco inteiro. Sem `measure`, só lê os volumes e o que já estiver medido:
+     * nunca roda du. `measure` mede o que falta; `refresh` mede tudo de novo.
+     */
+    whole(options?: { measure?: boolean; refresh?: boolean }): Promise<WholeDiskDTO>;
+    onWholeProgress(listener: (progress: WholeDiskProgress) => void): Unsubscribe;
   };
   ai: {
     /** Lê o que as ferramentas de IA deixaram no disco. Só lê: nada muda. */

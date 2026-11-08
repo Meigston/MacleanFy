@@ -36,7 +36,8 @@ import { PerformanceMonitor } from './perf/monitor';
 import { LoginApps, signerOf } from './login-apps';
 import { listStartupItems, readStartupPlists, setStartupEnabled } from './startup';
 import { removalScript, systemFilesOf, type SystemFile } from './system-files';
-import { getMaintenanceInfo, getSystemInfo, runAsAdmin, runMaintenance, setNoDsStore } from './system';
+import { getMaintenanceInfo, getSystemInfo, hasFullDiskAccess, runAsAdmin, runMaintenance, setNoDsStore } from './system';
+import { WholeDisk, wholeOptions } from './whole-disk';
 import { Updater } from './updater';
 import { firstLaunchOf } from './whats-new';
 
@@ -117,7 +118,12 @@ export function registerIpc(): void {
   // O mapa do espaço da conta, e o que a última pasta listada mostrou.
   const disk = new DiskMap();
   let knownDisk = new Map<string, number>();
-  app.on('will-quit', () => disk.cancel());
+  // O disco inteiro: os volumes do APFS na hora, e o volume de dados separado pelo du.
+  const whole = new WholeDisk(disk, { fullDiskAccess: hasFullDiskAccess });
+  app.on('will-quit', () => {
+    whole.cancel();
+    disk.cancel();
+  });
   // O que as ferramentas de IA deixaram no disco; sai só pela Lixeira ou pelo git, e não entra no histórico.
   const ai = new AiScanner(COLLECTORS, () => createContext({ trash: (path) => shell.trashItem(path) }));
 
@@ -181,6 +187,7 @@ export function registerIpc(): void {
     });
 
     if (!summary.dryRun && summary.totalCleanedItems > 0) {
+      whole.markChanged();
       await history.add({
         kind: 'clean',
         freedSpace: summary.totalFreedSpace,
@@ -271,6 +278,7 @@ export function registerIpc(): void {
     }
 
     if (result.uninstalled > 0) {
+      whole.markChanged();
       await history.add({
         kind: 'uninstall',
         freedSpace: result.freedSpace,
@@ -315,7 +323,16 @@ export function registerIpc(): void {
       if (!sender.isDestroyed()) sender.send(CHANNELS.aiProgress, progress);
     })
   );
-  handle(CHANNELS.aiRemove, (_sender, ids: unknown) => ai.remove(isStringArray(ids) ? ids : []));
+  handle(CHANNELS.aiRemove, async (_sender, ids: unknown) => {
+    const result = await ai.remove(isStringArray(ids) ? ids : []);
+    if (result.removed > 0) whole.markChanged();
+    return result;
+  });
+  handle(CHANNELS.diskWhole, (sender, options: unknown) =>
+    whole.read(wholeOptions(options), (progress) => {
+      if (!sender.isDestroyed()) sender.send(CHANNELS.diskWholeProgress, progress);
+    })
+  );
 
   handle(CHANNELS.startupList, async () => {
     const items = await listStartupItems();
@@ -340,7 +357,11 @@ export function registerIpc(): void {
   handle(CHANNELS.openAutomation, () => shell.openExternal(AUTOMATION_URL));
 
   handle(CHANNELS.maintenanceInfo, () => getMaintenanceInfo());
-  handle(CHANNELS.maintenanceRun, (_sender, task: MaintenanceTask) => runMaintenance(task));
+  handle(CHANNELS.maintenanceRun, async (_sender, task: MaintenanceTask) => {
+    const result = await runMaintenance(task);
+    if (task === 'snapshots' && result.success) whole.markChanged();
+    return result;
+  });
   handle(CHANNELS.maintenanceNoDsStore, (_sender, on: unknown) => setNoDsStore(on === true));
 
   handle(CHANNELS.openFullDiskAccess, () => shell.openExternal(FULL_DISK_ACCESS_URL));
@@ -358,7 +379,7 @@ export function registerIpc(): void {
     if (typeof path !== 'string') return;
     const isRelated = [...knownApps.values()].some((info) => info.related.some((r) => r.path === path));
     const isSystem = [...knownSystem.values()].some((files) => files.some((file) => file.path === path));
-    if (engine.knows(path) || knownApps.has(path) || isRelated || isSystem || [...knownStartup.values()].some((item) => item.path === path) || loginApps.knows(path) || knownDisk.has(path) || ai.knows(path)) {
+    if (engine.knows(path) || knownApps.has(path) || isRelated || isSystem || [...knownStartup.values()].some((item) => item.path === path) || loginApps.knows(path) || knownDisk.has(path) || ai.knows(path) || whole.knows(path)) {
       shell.showItemInFolder(path);
     }
   });
