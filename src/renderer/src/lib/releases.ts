@@ -11,6 +11,36 @@ export interface ReleaseNote {
  * do GitHub; aqui entra só o que a pessoa nota ao abrir o app.
  */
 export const RELEASE_NOTES: Record<string, Record<Locale, ReleaseNote[]>> = {
+  '0.1.6': {
+    'pt-BR': [
+      {
+        title: 'O disco inteiro',
+        text: 'Na Visão geral, o cartão Saúde do Mac agora abre o disco inteiro numa barra: o que é do macOS e não dá para mexer (sistema, inicialização e recuperação, memória virtual e arquivos do sistema), o que o macOS protege e não deixa identificar, e o que é seu, com um atalho para onde cada parte é limpa ou aberta.',
+      },
+      {
+        title: 'A pasta pessoal em fatias',
+        text: 'Desenvolvimento, IA, caches, iCloud, Fotos, Mail, Mensagens, Lixeira, dados de apps e o resto, e “Como a conta fecha” mostra como as partes somam o disco inteiro. Depois de uma limpeza, a medida avisa que ficou velha e pode ser refeita com um clique.',
+      },
+      {
+        title: 'Simuladores e emuladores',
+        text: 'Em Desenvolvimento, cada simulador do iOS e cada emulador do Android aparece com a versão do sistema, quando foi aberto e quanto ocupa. Os que não abrem mais ganham um aviso, e os que estão abertos não podem ser marcados.',
+      },
+    ],
+    en: [
+      {
+        title: 'The whole disk',
+        text: 'On the Overview, the Mac health card now opens the whole disk in one bar: what belongs to macOS and can’t be changed (system, startup and recovery, virtual memory and system files), what macOS protects and won’t let the app identify, and what is yours, with a shortcut to where each part is cleaned or opened.',
+      },
+      {
+        title: 'Your home folder in slices',
+        text: 'Development, AI, caches, iCloud, Photos, Mail, Messages, Trash, app data and the rest, and “How the numbers add up” shows how the parts make up the whole disk. After a cleanup, the measurement says it is out of date and can be redone with one click.',
+      },
+      {
+        title: 'Simulators and emulators',
+        text: 'Under Development, each iOS simulator and Android emulator shows up with its system version, when it was last opened and how much space it takes. The ones that no longer open get a warning, and the ones that are open can’t be ticked.',
+      },
+    ],
+  },
   '0.1.5': {
     'pt-BR': [
       {
