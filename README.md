@@ -49,16 +49,24 @@ shasum -a 256 ~/Downloads/MacleanFy-arm64.dmg
 **Overview.** Disk health, reclaimable space by group, what you have freed so far and
 recommendations on what to clean first.
 
-**Cleaning.** Sixteen categories in five groups. Each one shows its risk level, and you can
+**Cleaning.** Eighteen categories in five groups. Each one shows its risk level, and you can
 open a category to pick item by item.
 
 | Group | Categories |
 | --- | --- |
-| System junk | app caches, logs, temporary files, language files, orphaned launch agents |
+| System junk | app caches, logs, temporary files, language files, orphaned launch agents, leftovers from removed apps |
 | Development | npm/Yarn/pnpm/pip/Gradle/Cargo/CocoaPods/Xcode caches, Homebrew, Docker, stale `node_modules`, iOS simulators and Android emulators (each with its size, system version and when it was last opened) |
 | Storage | Trash, old downloads, iOS backups, Mail attachments, duplicate files |
 | Browsers | Chrome, Safari, Firefox and Arc caches |
 | Large files | files over 500 MB in Downloads and Documents |
+
+**Disk space.** The health card on the Overview opens the whole disk in one bar: what belongs
+to macOS and can't be changed (system, startup and recovery, virtual memory, system files),
+what macOS protects and won't let the app identify, and what is yours, with your home folder
+in slices and the numbers adding up to the whole disk. The system part comes from the APFS
+volumes, right away and without a password. Below it, your home folder is shown folder by
+folder, largest first; you can show any item in Finder or move it to the Trash, except the
+top-level folders of your account and Library and anything inside the Photos library.
 
 **Uninstaller.** Lists applications with the size of the app and of the files it left in
 your Library, and moves everything to the Trash.

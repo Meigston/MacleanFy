@@ -61,7 +61,7 @@ conta e a partir do próximo login; os serviços do sistema, que pedem a senha d
 administrador, abrem Itens de Início nos Ajustes. A lista dos apps só aparece depois que
 você deixa o MacleanFy controlar os Eventos do Sistema, que o macOS pergunta uma vez.
 
-**Limpeza.** Dezessete categorias em cinco grupos. Cada uma traz o nível de risco, e dá para
+**Limpeza.** Dezoito categorias em cinco grupos. Cada uma traz o nível de risco, e dá para
 abrir a categoria e escolher item a item.
 
 | Grupo | Categorias |
@@ -72,11 +72,17 @@ abrir a categoria e escolher item a item.
 | Navegadores | cache do Chrome, Safari, Firefox e Arc |
 | Arquivos grandes | arquivos acima de 500 MB em Downloads e Documentos |
 
-**Espaço em disco.** Mede a pasta pessoal e mostra onde está o espaço, pasta por pasta, do
-maior para o menor, com a parte do disco que ela ocupa. Uma medida só cobre três níveis, e
-a navegação dentro deles é instantânea; o que estiver abaixo é medido quando você entra. Dá
-para mostrar qualquer item no Finder ou mandá-lo para a Lixeira — menos as pastas do primeiro
-nível da conta e da Biblioteca.
+**Espaço em disco.** O cartão de saúde da Visão geral abre o disco inteiro numa barra: o que é
+do macOS e não dá para mexer (sistema, inicialização e recuperação, memória virtual, arquivos
+do sistema), o que o macOS protege e não deixa identificar, e o que é seu, com a pasta pessoal
+em fatias e a conta fechando com o total do disco. O que é do sistema vem dos volumes APFS,
+na hora e sem senha.
+
+Abaixo, a pasta pessoal aparece pasta por pasta, do maior para o menor, com a parte do disco
+que cada uma ocupa. Uma medida só cobre três níveis, e a navegação dentro deles é
+instantânea; o que estiver abaixo é medido quando você entra. Dá para mostrar qualquer item
+no Finder ou mandá-lo para a Lixeira — menos as pastas do primeiro nível da conta e da
+Biblioteca e o que está dentro da fototeca do Fotos.
 
 **Desinstalador.** Lista os aplicativos com o tamanho do app e dos arquivos que ele deixou
 na Biblioteca — caches, preferências, dados de WebKit, cookies, estado das janelas e o agente
